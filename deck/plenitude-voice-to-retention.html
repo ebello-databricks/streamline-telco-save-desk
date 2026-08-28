@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<title>Plenitude · Voice-to-Retention</title>
+<script>(function(){try{var t=localStorage.getItem('pln-theme');document.documentElement.setAttribute('data-theme',t==="light"?"light":"dark");}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800&display=swap">
+
+<style>
+  :root {
+    --ground: #F9F7F4; --surface: #FFFFFF; --surface-2: #EFEDE7;
+    --line: #E0DDD3; --line-strong: #CBC7BA;
+    --ink: #0B2026; --ink-2: #44565D; --ink-3: #6E8088;
+    --accent: #FF3621; --accent-soft: rgba(255, 54, 33, 0.08); --accent-line: rgba(255, 54, 33, 0.26);
+    --critical: #E5391D; --critical-soft: rgba(229, 57, 29, 0.10);
+    --warning: #A9640A; --warning-soft: rgba(254, 171, 3, 0.16);
+    --healthy: #00875A; --healthy-soft: rgba(0, 169, 113, 0.14);
+    --shadow: 0 1px 2px rgba(11,32,38,.05), 0 8px 30px rgba(11,32,38,.07);
+    --grid-dot: rgba(11,32,38,0.05);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --ground: #0B2026; --surface: #14303A; --surface-2: #1C3B45;
+      --line: #2C4952; --line-strong: #3C5A63;
+      --ink: #F9F7F4; --ink-2: #C6D3D6; --ink-3: #9EB7BF;
+      --accent: #FF6A52; --accent-soft: rgba(255,106,82,.15); --accent-line: rgba(255,106,82,.36);
+      --critical: #FF6A52; --critical-soft: rgba(255,106,82,.16);
+      --warning: #FEAB03; --warning-soft: rgba(254,171,3,.16);
+      --healthy: #00C489; --healthy-soft: rgba(0,196,137,.16);
+      --shadow: 0 1px 2px rgba(0,0,0,.35), 0 12px 40px rgba(0,0,0,.4);
+      --grid-dot: rgba(158,183,191,0.06);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0B2026; --surface: #14303A; --surface-2: #1C3B45;
+    --line: #2C4952; --line-strong: #3C5A63;
+    --ink: #F9F7F4; --ink-2: #C6D3D6; --ink-3: #9EB7BF;
+    --accent: #FF6A52; --accent-soft: rgba(255,106,82,.15); --accent-line: rgba(255,106,82,.36);
+    --critical: #FF6A52; --critical-soft: rgba(255,106,82,.16);
+    --warning: #FEAB03; --warning-soft: rgba(254,171,3,.16);
+    --healthy: #00C489; --healthy-soft: rgba(0,196,137,.16);
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 12px 40px rgba(0,0,0,.4);
+    --grid-dot: rgba(158,183,191,0.06);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(var(--grid-dot) 1px, transparent 1px) 0 0 / 22px 22px, var(--ground);
+    color: var(--ink); font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+    font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; overflow: hidden;
+  }
+  h1, h2, h3 { font-family: "DM Sans", system-ui, sans-serif; text-wrap: balance; margin: 0; }
+  .mono { font-family: "DM Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .deck { height: 100vh; overflow-y: auto; scroll-snap-type: y mandatory; scroll-behavior: smooth; scrollbar-width: none; }
+  .deck::-webkit-scrollbar { display: none; }
+  .slide { min-height: 100vh; scroll-snap-align: start; scroll-snap-stop: always; display: grid; align-content: center; padding: clamp(74px, 9vh, 104px) clamp(22px, 5vw, 72px) clamp(48px, 7vh, 76px); }
+  .inner { width: 100%; max-width: 1120px; margin: 0 auto; }
+
+  .topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 60; display: flex; align-items: center; gap: 14px; padding: 14px clamp(22px, 5vw, 40px); background: color-mix(in srgb, var(--ground) 80%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+  .brand { font-family: "DM Sans"; font-weight: 800; font-size: 15px; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+  .brand .bolt { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); display: grid; place-items: center; color: #fff; font-size: 13px; }
+  .brand .sub { color: var(--ink-3); font-weight: 500; }
+  .counter { font-family: "DM Mono"; font-size: 12.5px; color: var(--ink-3); }
+  .counter b { color: var(--ink); }
+  .progress { position: fixed; top: 0; left: 0; height: 2px; background: var(--accent); z-index: 61; transition: width .3s ease; }
+
+  .dots { position: fixed; right: clamp(12px, 2vw, 22px); top: 50%; transform: translateY(-50%); z-index: 60; display: flex; flex-direction: column; gap: 11px; }
+  .dots button { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 1px solid var(--line-strong); background: transparent; cursor: pointer; transition: all .2s; }
+  .dots button:hover { border-color: var(--accent); }
+  .dots button.on { background: var(--accent); border-color: var(--accent); transform: scale(1.25); }
+  @media (max-width: 760px){ .dots { display: none; } }
+
+  .eyebrow { display: inline-flex; align-items: center; gap: 10px; font-family: "DM Mono"; font-size: 11.5px; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; color: var(--ink-3); margin-bottom: 16px; }
+  .eyebrow .num { color: var(--accent); font-weight: 600; border: 1px solid var(--accent-line); border-radius: 5px; padding: 2px 7px; }
+  .lede { font-size: clamp(14px, 1.7vw, 17px); color: var(--ink-2); max-width: 66ch; line-height: 1.6; }
+  h2.title { font-size: clamp(26px, 4.2vw, 42px); font-weight: 800; letter-spacing: -.02em; line-height: 1.05; margin-bottom: 14px; }
+  .accent { color: var(--accent); }
+  .good { color: var(--healthy); }
+
+  .kicker { font-family: "DM Mono"; font-size: 12.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 22px; }
+  .hero h1 { font-size: clamp(36px, 7.4vw, 76px); font-weight: 800; letter-spacing: -.03em; line-height: .98; margin-bottom: 18px; }
+  .hero h1 .stroke { color: var(--ink-3); }
+  .hero .sub { font-size: clamp(16px, 2.1vw, 21px); color: var(--ink-2); max-width: 62ch; }
+  .herostats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-top: 30px; }
+  .herostats div { background: var(--surface); padding: 18px 20px; }
+  .herostats .v { font-family: "DM Sans"; font-weight: 800; font-size: clamp(20px, 3vw, 30px); letter-spacing: -.02em; }
+  .herostats .l { font-size: 12.5px; color: var(--ink-3); margin-top: 4px; }
+  .byline { margin-top: 28px; font-size: 13px; color: var(--ink-2); }
+  .hint { margin-top: 14px; font-family: "DM Mono"; font-size: 12px; color: var(--ink-3); display: inline-flex; align-items: center; gap: 8px; }
+  .hint kbd { font-family: inherit; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; padding: 2px 7px; color: var(--ink-2); background: var(--surface); }
+  @media (max-width: 720px){ .herostats { grid-template-columns: repeat(2,1fr); } }
+
+  .grid { display: grid; gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 18px 20px; box-shadow: var(--shadow); }
+
+  .pain-list { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 11px; }
+  .pain-list li { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--critical); border-radius: 12px; padding: 15px 18px; box-shadow: var(--shadow); }
+  .pain-list .big { font-family: "DM Sans"; font-weight: 800; font-size: 25px; letter-spacing: -.02em; color: var(--critical); line-height: 1; white-space: nowrap; }
+  .pain-list .txt { font-size: 14px; color: var(--ink-2); }
+  .pain-list .txt b { color: var(--ink); font-weight: 600; }
+
+  .value-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 13px; margin-top: 22px; }
+  @media (max-width: 900px){ .value-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 520px){ .value-grid { grid-template-columns: 1fr; } }
+  .vcard { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; box-shadow: var(--shadow); }
+  .vcard .metric { font-family: "DM Sans"; font-weight: 800; font-size: clamp(20px, 2.6vw, 28px); letter-spacing: -.02em; }
+  .vcard .metric.good { color: var(--healthy); } .vcard .metric.brand { color: var(--accent); }
+  .vcard h3 { font-size: 14.5px; font-weight: 700; margin: 5px 0 6px; }
+  .vcard p { margin: 0; color: var(--ink-2); font-size: 13px; line-height: 1.45; }
+  .persona-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:20px; }
+  @media (max-width:820px){ .persona-grid { grid-template-columns:1fr; } }
+  .persona { background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:13px; padding:18px 20px; box-shadow:var(--shadow); }
+  .persona .role { font-family:"DM Mono"; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); }
+  .persona .who { font-family:"DM Sans"; font-weight:700; font-size:16px; margin:3px 0 8px; }
+  .persona .desc { font-size:13.5px; color:var(--ink-2); line-height:1.55; }
+  .persona.green { border-left-color:var(--healthy); }
+
+  .diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: clamp(18px, 2.6vw, 30px); box-shadow: var(--shadow); overflow-x: auto; margin-top: 22px; }
+  .flow { display: flex; align-items: stretch; gap: 0; min-width: 900px; }
+  .stage { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 9px; }
+  .arrow { align-self: center; color: var(--accent); flex: 0 0 26px; display: grid; place-items: center; font-size: 19px; }
+  .node { background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: 11px; padding: 12px 13px; }
+  .node .nlabel { font-family: "DM Mono"; font-size: 9.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); }
+  .node .ntitle { font-family: "DM Sans"; font-weight: 700; font-size: 13.5px; margin-top: 3px; letter-spacing: -.01em; }
+  .node .ndesc { font-size: 11.5px; color: var(--ink-2); margin-top: 4px; line-height: 1.4; }
+  .node.accent-node { border-color: var(--accent-line); background: var(--accent-soft); }
+  .node.brain { border-color: color-mix(in srgb, var(--healthy) 45%, var(--line)); }
+  .node.brain .nlabel { color: var(--healthy); }
+  .stagecap { font-family: "DM Mono"; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-3); text-align: center; margin-bottom: 4px; }
+  .govband { margin-top: 12px; min-width: 900px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 9px; background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 11px; padding: 11px 15px; font-size: 13px; color: var(--ink); }
+  .govband b { font-weight: 700; }
+  .govband .chip { font-family: "DM Mono"; font-size: 11px; background: var(--surface); border: 1px solid var(--accent-line); border-radius: 6px; padding: 3px 9px; }
+
+  .steps { display: grid; gap: 10px; margin-top: 22px; }
+  .step { display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 15px 20px; box-shadow: var(--shadow); }
+  .step .idx { font-family: "DM Sans"; font-weight: 800; font-size: 15px; color: var(--accent); width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--accent-line); display: grid; place-items: center; background: var(--accent-soft); }
+  .step .body h3 { font-size: 15.5px; font-weight: 700; letter-spacing: -.01em; }
+  .step .body p { margin: 2px 0 0; color: var(--ink-2); font-size: 13px; }
+  .step .layer { font-family: "DM Mono"; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--healthy); border: 1px solid color-mix(in srgb, var(--healthy) 40%, var(--line)); border-radius: 6px; padding: 4px 9px; white-space: nowrap; }
+  @media (max-width: 620px){ .step { grid-template-columns: auto 1fr; } .step .layer { grid-column: 2; justify-self: start; } }
+
+  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:13px; margin-top:22px; }
+  @media (max-width:900px){ .kpi-grid { grid-template-columns:1fr 1fr; } }
+  .kpi-card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px; box-shadow:var(--shadow); }
+  .kpi-card.crit { border-left:3px solid var(--critical); } .kpi-card.high { border-left:3px solid var(--warning); }
+  .kpi-card.med { border-left:3px solid var(--ink-3); } .kpi-card.low { border-left:3px solid var(--healthy); }
+  .kpi-card .kv { font-family:"DM Sans"; font-weight:800; font-size:clamp(24px,3.4vw,34px); letter-spacing:-.02em; line-height:1.05; font-variant-numeric:tabular-nums; }
+  .kpi-card .kl { font-size:13px; color:var(--ink-2); margin-top:7px; font-weight:600; }
+  .kpi-card .kd { font-family:"DM Mono"; font-size:11px; color:var(--ink-3); margin-top:5px; }
+
+  .abars { display:grid; gap:10px; margin-top:22px; }
+  .abar { display:grid; grid-template-columns:190px 1fr 64px; align-items:center; gap:14px; }
+  @media (max-width:640px){ .abar { grid-template-columns:120px 1fr 52px; } }
+  .abar .lab { font-size:13px; color:var(--ink); font-weight:600; }
+  .abar .lab em { font-style:normal; font-family:"DM Mono"; font-size:10px; color:var(--ink-3); display:block; }
+  .abar .track { position:relative; height:18px; background:var(--surface-2); border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+  .abar .fill { position:absolute; left:0; top:0; bottom:0; background:var(--accent); border-radius:9px; min-width:5px; }
+  .abar .fill.voice { background:var(--healthy); }
+  .abar .val { font-family:"DM Mono"; font-weight:700; text-align:right; color:var(--ink); }
+
+  .cols-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:22px; }
+  @media (max-width:820px){ .cols-3 { grid-template-columns:1fr; } }
+  .phase { background:var(--surface); border:1px solid var(--line); border-top:3px solid var(--accent); border-radius:13px; padding:18px 20px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:10px; }
+  .phase.act { border-top-color:var(--healthy); }
+  .phase-h { font-family:"DM Sans"; font-weight:800; font-size:15px; display:flex; align-items:center; gap:11px; }
+  .phase-h .pn { width:28px; height:28px; border-radius:8px; background:var(--accent-soft); border:1px solid var(--accent-line); color:var(--accent); display:grid; place-items:center; font-size:14px; }
+  .phase.act .phase-h .pn { background:var(--healthy-soft); border-color:color-mix(in srgb, var(--healthy) 40%, var(--line)); color:var(--healthy); }
+  .phase .q { margin:0; font-size:14px; font-style:italic; color:var(--ink); line-height:1.4; }
+  .phase .q::before { content:"\201C"; color:var(--accent); } .phase .q::after { content:"\201D"; color:var(--accent); }
+  .phase .pd { margin:0; font-size:12.5px; color:var(--ink-2); line-height:1.5; }
+  .phase .prod { margin-top:auto; padding-top:8px; font-family:"DM Mono"; font-size:11px; color:var(--ink-3); }
+
+  .tradeoffs { display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-top:22px; }
+  @media (max-width:820px){ .tradeoffs { grid-template-columns:1fr; } }
+  .to { background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent-line); border-radius:13px; padding:15px 18px; box-shadow:var(--shadow); }
+  .to h3 { font-size:14px; font-weight:700; margin:0 0 5px; letter-spacing:-.01em; }
+  .to p { margin:0; font-size:12.5px; color:var(--ink-2); line-height:1.5; }
+  .to p b { color:var(--ink); font-weight:600; }
+
+  .rmap { display:grid; grid-template-columns:repeat(4,1fr); gap:13px; margin-top:22px; }
+  @media (max-width:900px){ .rmap { grid-template-columns:1fr 1fr; } }
+  @media (max-width:520px){ .rmap { grid-template-columns:1fr; } }
+  .rcard { background:var(--surface); border:1px solid var(--line); border-top:3px solid var(--accent); border-radius:14px; padding:16px 18px; box-shadow:var(--shadow); }
+  .rcard .rn { font-family:"DM Mono"; font-size:11px; color:var(--accent); }
+  .rcard h3 { font-size:14.5px; font-weight:700; margin:6px 0 6px; letter-spacing:-.01em; }
+  .rcard p { margin:0; font-size:12.5px; color:var(--ink-2); line-height:1.45; }
+
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .55s ease, transform .55s ease; }
+  .slide.active .reveal { opacity: 1; transform: none; }
+  .slide.active .reveal:nth-child(2){ transition-delay: .06s; }
+  .slide.active .reveal:nth-child(3){ transition-delay: .12s; }
+  .slide.active .reveal:nth-child(4){ transition-delay: .18s; }
+  @media (prefers-reduced-motion: reduce){ .reveal { opacity: 1; transform: none; transition: none; } }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+  .controls { position:fixed; right:clamp(14px,2vw,26px); bottom:clamp(14px,3vh,26px); z-index:70; display:flex; align-items:center; gap:10px; }
+  .navbtn { width:44px; height:44px; border-radius:50%; border:1px solid var(--line-strong); background:var(--surface); color:var(--ink); display:grid; place-items:center; cursor:pointer; box-shadow:var(--shadow); transition:border-color .18s, color .18s, opacity .18s; }
+  .navbtn svg { width:20px; height:20px; }
+  .navbtn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+  .navbtn:disabled { opacity:.3; cursor:default; }
+  .themebtn { width:34px; height:34px; border-radius:9px; border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-2); display:grid; place-items:center; cursor:pointer; margin-left:6px; }
+  .themebtn:hover { border-color:var(--accent); color:var(--accent); }
+  .themebtn svg { width:17px; height:17px; }
+  .themebtn .ic-sun { display:none; } .themebtn .ic-moon { display:block; }
+  :root[data-theme="dark"] .themebtn .ic-sun { display:block; } :root[data-theme="dark"] .themebtn .ic-moon { display:none; }
+
+  .foot { margin-top:16px; font-family:"DM Mono"; font-size:11.5px; color:var(--ink-3); line-height:1.55; max-width:100ch; }
+  .tag { display:inline-block; font-family:"DM Mono"; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--warning); border:1px solid color-mix(in srgb, var(--warning) 45%, var(--line)); background:var(--warning-soft); border-radius:6px; padding:3px 9px; margin-bottom:14px; }
+
+  .ty-title { font-family:"DM Sans"; font-weight:800; font-size:clamp(40px,8vw,86px); letter-spacing:-.03em; line-height:.96; margin:14px 0 16px; }
+  .ty-value { font-size:clamp(16px,2.1vw,21px); color:var(--ink-2); max-width:64ch; margin:0 0 28px; }
+  .ty-sign { border-top:1px solid var(--line); padding-top:16px; max-width:64ch; }
+  .ty-name { font-family:"DM Sans"; font-weight:700; font-size:17px; }
+  .ty-role { font-size:14px; color:var(--ink-2); margin-top:2px; }
+  body.on-final .topbar, body.on-final .dots, body.on-final .progress { opacity:0 !important; pointer-events:none; }
+  .topbar, .dots, .progress { transition:opacity .4s ease; }
+
+  @media print {
+    @page { size: A4 landscape; margin: 0; }
+    * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+    html, body { height:auto !important; overflow:visible !important; }
+    .topbar, .dots, .progress, .hint, .controls { display:none !important; }
+    .deck { height:auto !important; overflow:visible !important; scroll-snap-type:none !important; display:block !important; }
+    .slide { width:297mm !important; height:210mm !important; min-height:0 !important; margin:0 !important; padding:14mm !important; display:flex !important; align-items:center !important; page-break-after:always; break-after:page; overflow:hidden !important; }
+    .slide:last-child { page-break-after:auto; }
+    .reveal { opacity:1 !important; transition:none !important; }
+    .diagram { overflow:visible !important; }
+  }
+</style>
+
+<div class="progress" id="progress"></div>
+<div class="topbar">
+  <span class="brand"><span class="bolt">⚡</span> Plenitude <span class="sub">· Voice-to-Retention</span></span>
+  <span class="counter" style="margin-left:auto"><b id="cur">01</b> / <span id="tot">11</span></span>
+  <button class="themebtn" id="themeBtn" type="button" aria-label="Toggle theme" title="Toggle theme">
+    <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+    <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+  </button>
+</div>
+<div class="dots" id="dots"></div>
+<div class="controls">
+  <button class="navbtn" id="prevBtn" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+  <button class="navbtn" id="nextBtn" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+</div>
+
+<div class="deck" id="deck">
+
+  <!-- 1 · HERO -->
+  <section class="slide hero" data-label="Voice-to-Retention">
+    <div class="inner">
+      <div class="kicker reveal">Plenitude · B2C Energy Retail — Databricks Data Intelligence Platform</div>
+      <h1 class="reveal">Turn every call into a <span class="accent">churn signal</span>,<br><span class="stroke">before</span> the customer leaves.</h1>
+      <p class="sub reveal">Plenitude's contact centre hears churn intent every day — then it evaporates as unstructured audio. Voice-to-Retention captures it, scores it, and hands the retention team a ranked call list. One integrated journey: raw calls → Lakeflow → Unity Catalog → Lakebase → ML + Gen AI → Genie → a Databricks App.</p>
+      <div class="herostats reveal">
+        <div><div class="v good">€4.5M</div><div class="l">annual gross margin protected</div></div>
+        <div><div class="v">12% → 11%</div><div class="l">B2C churn, one point recovered</div></div>
+        <div><div class="v">0.77</div><div class="l">model ROC-AUC (held-out)</div></div>
+        <div><div class="v accent">3.0×</div><div class="l">lift on the retention call list</div></div>
+      </div>
+      <div class="byline reveal">Emmanuele Bello · Delivery Solutions Architect, SEMEA &nbsp;|&nbsp; Customer-safe synthetic data · fully reproducible</div>
+      <div class="hint reveal">Use <kbd>→</kbd> / <kbd>Space</kbd> to advance · <kbd>T</kbd> not needed, top-right toggles theme</div>
+    </div>
+  </section>
+
+  <!-- 2 · PROBLEM -->
+  <section class="slide" data-label="The problem">
+    <div class="inner">
+      <div class="eyebrow reveal"><span class="num">01</span> The business problem</div>
+      <h2 class="title reveal">In deregulated energy, switching is <span class="accent">one click</span> — and Plenitude finds out too late.</h2>
+      <p class="lede reveal">Italy's retail energy market is fully liberalised. A comparator site and a five-minute form is all it takes to leave. The buying signals — a bill shock, an unresolved complaint, an "I'm calling the competition" — arrive first through the contact centre, as raw audio that no model ever sees.</p>
+      <ul class="pain-list">
+        <li class="reveal"><span class="big">~2.5M</span><span class="txt"><b>B2C power &amp; gas customers</b> in scope — residential and micro-business across Italy.</span></li>
+        <li class="reveal"><span class="big">~12%</span><span class="txt"><b>leave every year</b> — roughly <b>300,000 customers</b> lost annually, each taking their margin and CLV with them.</span></li>
+        <li class="reveal"><span class="big">0</span><span class="txt"><b>of that voice signal reaches a model.</b> Calls are handled reactively, ticket by ticket; churn intent is never scored, ranked, or acted on before renewal.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 3 · OUTCOME / VALUE -->
+  <section class="slide" data-label="The outcome">
+    <div class="inner">
+      <div class="eyebrow reveal"><span class="num">02</span> The outcome we're buying</div>
+      <h2 class="title reveal">Recover <span class="accent">one point of churn</span> — worth ≈ €4.5M a year in protected margin.</h2>
+      <p class="lede reveal">The model turns the contact centre into an early-warning system. Cutting annual churn from <b>12% to 11%</b> on 2.5M customers keeps ~25,000 customers who would otherwise have left.</p>
+      <div class="value-grid">
+        <div class="vcard reveal"><div class="metric good">+25,000</div><h3>Customers retained / yr</h3><p>1 point of churn recovered on the 2.5M base — the conservative target.</p></div>
+        <div class="vcard reveal"><div class="metric brand">€4.5M</div><h3>Gross margin protected</h3><p>25,000 × ~€180 annual gross margin per B2C customer. Estimate, deliberately conservative.</p></div>
+        <div class="vcard reveal"><div class="metric">3.0×</div><h3>Retention-team efficiency</h3><p>The top-decile call list is 3× more likely to contain a real churner than a random dial-through.</p></div>
+        <div class="vcard reveal"><div class="metric">&lt; 24h</div><h3>Signal-to-action latency</h3><p>A negative call scores and surfaces in the cockpit the same day — not at renewal.</p></div>
+      </div>
+      <div class="persona-grid">
+        <div class="persona reveal"><div class="role">Executive sponsor · Chief Commercial Officer</div><div class="who">"Protect the base and the margin."</div><div class="desc">Sees churn ↓ 1pt, ≈€4.5M margin protected, and CLV preserved on the most valuable segments — a board-level number, not "improved efficiency".</div></div>
+        <div class="persona green reveal"><div class="role">Domain owner · Head of Retention</div><div class="who">"Tell my team who to call first."</div><div class="desc">Gets a daily ranked call list with the top-3 reasons per customer — 3× hit rate, so limited retention capacity is spent where it moves the needle.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · THE INTEGRATED JOURNEY -->
+  <section class="slide" data-label="The data journey">
+    <div class="inner">
+      <div class="eyebrow reveal"><span class="num">03</span> The integrated data journey</div>
+      <h2 class="title reveal">One journey, not stitched demos — raw voice to a retention action.</h2>
+      <p class="lede reveal">Every stage of the FE Bar journey, wired end to end on a single platform. The voice signal flows from raw transcript all the way to the cockpit the retention agent opens each morning.</p>
+      <div class="diagram reveal">
+        <div class="flow">
+          <div class="stage">
+            <div class="stagecap">Raw · synthetic</div>
+            <div class="node"><div class="nlabel">Landing</div><div class="ntitle">Call transcripts</div><div class="ndesc">10,646 contact-centre calls, IT-language</div></div>
+            <div class="node"><div class="nlabel">Landing</div><div class="ntitle">Consumption · contracts · customers</div><div class="ndesc">15,000 customers, 180k monthly bills</div></div>
+          </div>
+          <div class="arrow">→</div>
+          <div class="stage"><div class="stagecap">Ingest</div><div class="node"><div class="nlabel">Lakeflow</div><div class="ntitle">Declarative Pipelines</div><div class="ndesc">Bronze → Silver, auto-ingest &amp; expectations</div></div></div>
+          <div class="arrow">→</div>
+          <div class="stage"><div class="stagecap">Govern</div><div class="node accent-node"><div class="nlabel">Unity Catalog</div><div class="ntitle">One governed lakehouse</div><div class="ndesc">Lineage, tags, PII masking, grants</div></div></div>
+          <div class="arrow">→</div>
+          <div class="stage">
+            <div class="stagecap">Intelligence</div>
+            <div class="node brain"><div class="nlabel">Gen AI · FMAPI</div><div class="ntitle">ai_analyze_sentiment · ai_classify</div><div class="ndesc">Voice → sentiment, intent, churn signal</div></div>
+            <div class="node brain"><div class="nlabel">ML</div><div class="ntitle">Churn model</div><div class="ndesc">Gradient boosting · scores every customer</div></div>
+          </div>
+          <div class="arrow">→</div>
+          <div class="stage">
+            <div class="stagecap">Serve &amp; act</div>
+            <div class="node"><div class="nlabel">Lakebase</div><div class="ntitle">Operational serving</div><div class="ndesc">Low-latency scores for the app</div></div>
+            <div class="node accent-node"><div class="nlabel">App · Genie</div><div class="ntitle">Retention cockpit</div><div class="ndesc">Ranked list + NL questions</div></div>
+          </div>
+        </div>
+        <div class="govband"><b>Unity Catalog governs the whole path</b> <span class="chip">lineage</span> <span class="chip">PII masking on transcripts</span> <span class="chip">row/column grants</span> <span class="chip">model registry</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · HOW IT WORKS: GENAI ENRICHMENT -->
+  <section class="slide" data-label="How it works">
+    <div class="inner">
+      <div class="eyebrow reveal"><span class="num">04</span> How it works — the voice becomes a feature</div>
+      <h2 class="title reveal">Gen AI reads the call. The model reads the <span class="accent">Gen AI</span>.</h2>
+      <p class="lede reveal">Each transcript passes through Foundation Model API functions running natively in Databricks SQL — no bespoke model to host. The structured output becomes the churn model's strongest predictors.</p>
+      <div class="steps">
+        <div class="step reveal"><div class="idx">1</div><div class="body"><h3>Transcribe &amp; land the call</h3><p>Speech-to-text drops each call into the bronze layer as a transcript row (synthetic here; a real deployment wires the telephony feed).</p></div><span class="layer">Lakeflow</span></div>
+        <div class="step reveal"><div class="idx">2</div><div class="body"><h3>ai_analyze_sentiment(transcript)</h3><p>Every call gets a sentiment label + score. "Bolletta tripla, cambio fornitore" lands as strongly negative.</p></div><span class="layer">FMAPI · SQL</span></div>
+        <div class="step reveal"><div class="idx">3</div><div class="body"><h3>ai_classify(transcript, [billing, retention, technical, …])</h3><p>Intent routing recovered from the words, plus a churn-signal flag when the customer names a competitor or "disdetta".</p></div><span class="layer">FMAPI · SQL</span></div>
+        <div class="step reveal"><div class="idx">4</div><div class="body"><h3>Aggregate to the customer</h3><p>Negative-call count, retention-line calls, avg sentiment and competitor mentions roll up into the gold feature table — the model's inputs.</p></div><span class="layer">Unity Catalog</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · THE MODEL -->
+  <section class="slide" data-label="The model">
+    <div class="inner">
+      <div class="eyebrow reveal"><span class="num">05</span> The model — real, committed metrics</div>
+      <h2 class="title reveal">The voice features are the <span class="accent">top predictors</span>. The numbers hold up.</h2>
+      <p class="lede reveal">Gradient boosting on 15,000 customers × 17 features, held-out test of 3,750. Every metric below is committed to the repo in <span class="mono">evidence/model_metrics.json</span>.</p>
+      <div class="value-grid" style="margin-bottom:6px;">
+        <div class="vcard reveal"><div class="metric">0.765</div><h3>ROC-AUC</h3><p>Held-out ranking quality.</p></div>
+        <div class="vcard reveal"><div class="metric good">0.68</div><h3>Precision @ top-10%</h3><p>Of the top-decile call list, 68% really churn.</p></div>
+        <div class="vcard reveal"><div class="metric accent">3.04×</div><h3>Lift over base</h3><p>vs. the 22.3% base rate in the (signal-enriched) dataset.</p></div>
+        <div class="vcard reveal"><div class="metric">17</div><h3>Features</h3><p>Billing, contract, tenure — and the voice signals.</p></div>
+      </div>
+      <div class="abars">
+        <div class="abar reveal"><div class="lab">churn_mentions <em>voice · Gen AI</em></div><div class="track"><div class="fill voice" style="width:100%"></div></div><div class="val">.299</div></div>
+        <div class="abar reveal"><div class="lab">bill_trend_pct <em>consumption</em></div><div class="track"><div class="fill" style="width:43%"></div></div><div class="val">.128</div></div>
+        <div class="abar reveal"><div class="lab">n_retention_calls <em>voice</em></div><div class="track"><div class="fill voice" style="width:37%"></div></div><div class="val">.111</div></div>
+        <div class="abar reveal"><div class="lab">is_variable <em>contract</em></div><div class="track"><div class="fill" style="width:26%"></div></div><div class="val">.077</div></div>
+        <div class="abar reveal"><div class="lab">pay_risky <em>payment</em></div><div class="track"><div class="fill" style="width:25%"></div></div><div class="val">.074</div></div>
+        <div class="abar reveal"><div class="lab">avg_sentiment <em>voice · Gen AI</em></div><div class="track"><div class="fill voice" style="width:15%"></div></div><div class="val">.046</div></div>
+      </div>
+      <div class="foot">Green bars are voice-derived features. The single strongest driver — <b>churn_mentions</b> — exists only because Gen AI read the call. Without the voice layer, the model is blind to the clearest signal a customer ever gives.</div>
+    </div>
+  </section>
+
+  <!-- 7 · RISK BANDS -->
+  <section class="slide" data-label="Who to call">
+    <div class="inner">
+      <div class="eyebrow reveal"><span class="num">06</span> Who to call first</div>
+      <h2 class="title reveal">15,000 customers, scored and banded — the team works <span class="accent">top-down</span>.</h2>
+      <p class="lede reveal">The model scores every customer nightly and sorts them into four risk bands. The retention team starts at Critical and works down until capacity runs out — each row carries the top-3 reasons.</p>
+      <div class="kpi-grid">
+        <div class="kpi-card crit reveal"><div class="kv accent">497</div><div class="kl">Critical</div><div class="kd">p ≥ 0.75 · call today</div></div>
+        <div class="kpi-card high reveal"><div class="kv">1,104</div><div class="kl">High</div><div class="kd">0.50–0.75 · call this week</div></div>
+        <div class="kpi-card med reveal"><div class="kv">2,735</div><div class="kl">Medium</div><div class="kd">0.25–0.50 · nurture / offer</div></div>
+        <div class="kpi-card low reveal"><div class="kv good">10,664</div><div class="kl">Low</div><div class="kd">&lt; 0.25 · leave alone</div></div>
+      </div>
+      <div class="foot">Instead of dialling 15,000 people, the team calls ~1,600 (Critical + High) where two-thirds are genuine churn risk. Example top-of-list reasons: <b>"mentioned switching; bill up 34%; called retention line."</b></div>
+    </div>
+  </section>
+
+  <!-- 8 · APP + GENIE -->
+  <section class="slide" data-label="App + Genie">
+    <div class="inner">
+      <div class="eyebrow reveal"><span class="num">07</span> Surfaced to the business</div>
+      <h2 class="title reveal">A cockpit for the team, and a <span class="accent">Genie</span> for the analyst.</h2>
+      <p class="lede reveal">The same governed gold tables power two surfaces: a Databricks App the retention team lives in, and a Genie room the analyst interrogates in plain Italian or English.</p>
+      <div class="cols-3">
+        <div class="phase reveal"><div class="phase-h"><span class="pn">1</span> See</div><p class="pd">The <b>Retention Cockpit</b> (Databricks App) opens on the ranked Critical/High list — churn probability, band, reasons, monthly bill, region. Filter by area or product.</p><div class="prod">Databricks App · Lakebase</div></div>
+        <div class="phase reveal"><div class="phase-h"><span class="pn">2</span> Ask</div><p class="q">Which Lombardia customers on variable tariffs mentioned switching in the last 30 days?</p><p class="pd">The <b>Genie room</b> answers in natural language over the gold tables — no SQL, no ticket to the data team.</p><div class="prod">Genie · Unity Catalog</div></div>
+        <div class="phase act reveal"><div class="phase-h"><span class="pn">3</span> Act</div><p class="pd">Agent opens the customer, sees the reasons, makes a targeted retention offer, and logs the outcome — which feeds back as a label for the next model run.</p><div class="prod">Closed loop → retrain</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 · DECISIONS & TRADE-OFFS -->
+  <section class="slide" data-label="Decisions & trade-offs">
+    <div class="inner">
+      <div class="eyebrow reveal"><span class="num">08</span> Decisions &amp; trade-offs</div>
+      <h2 class="title reveal">Every choice was deliberate — here's the <span class="accent">why</span>.</h2>
+      <div class="tradeoffs">
+        <div class="to reveal"><h3>Gradient boosting, not deep learning</h3><p><b>Why:</b> tabular data at this scale, and the retention team needs <b>explainable reasons</b> per customer. GBM gives strong AUC + feature attributions the business trusts. A neural net would add opacity for no lift here.</p></div>
+        <div class="to reveal"><h3>FMAPI (ai_query), not a bespoke fine-tune</h3><p><b>Why:</b> <b>time-to-value.</b> ai_analyze_sentiment / ai_classify run in SQL today with governance built in. A custom transcript model is a later optimisation, not a v1 dependency.</p></div>
+        <div class="to reveal"><h3>Lakebase for serving, not batch-only</h3><p><b>Why:</b> the cockpit needs <b>low-latency reads</b> of the latest scores as agents work the list. Lakebase serves operationally while the analytics stay in the lakehouse — one platform, no export.</p></div>
+        <div class="to reveal"><h3>Synthetic data, generated for signal</h3><p><b>Why:</b> <b>customer-safe by construction</b> — no real Plenitude data ever touches the repo. Churn is generated from real-world drivers so the model learns genuine, defensible patterns.</p></div>
+      </div>
+      <div class="foot">AI as a force multiplier: the whole build — data generator, pipeline, model, app, deck — was produced with Claude Code as a pair-builder; the architecture decisions, the value framing, and the trade-offs above are the author's.</div>
+    </div>
+  </section>
+
+  <!-- 10 · WHAT'S POSSIBLE NEXT -->
+  <section class="slide" data-label="What's next">
+    <div class="inner">
+      <div class="eyebrow reveal"><span class="num">09</span> What's possible next</div>
+      <h2 class="title reveal">From nightly batch to a <span class="accent">real-time retention brain</span>.</h2>
+      <p class="lede reveal">The same governed foundation extends naturally — each step is an increment, not a rebuild.</p>
+      <div class="rmap">
+        <div class="rcard reveal"><div class="rn">NEXT</div><h3>Streaming scoring</h3><p>Score the call the moment it ends via Structured Streaming — the agent sees risk before the customer hangs up.</p></div>
+        <div class="rcard reveal"><div class="rn">NEXT</div><h3>Gen AI retention offers</h3><p>An LLM drafts the personalised save-offer and talk-track from the customer's history and the call reasons.</p></div>
+        <div class="rcard reveal"><div class="rn">LATER</div><h3>Retention agent</h3><p>A Databricks agent that recommends the next-best action and can execute the offer, with a human in the loop.</p></div>
+        <div class="rcard reveal"><div class="rn">SCALE</div><h3>Reuse the pattern</h3><p>The same ingest→govern→ML/GenAI→serve spine powers Enel Grids anomaly detection and other energy use cases.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 · CLOSE -->
+  <section class="slide" data-label="Close" data-final="1">
+    <div class="inner">
+      <div class="kicker reveal">Plenitude · Voice-to-Retention</div>
+      <div class="ty-title reveal">The call was<br>always the signal.</div>
+      <p class="ty-value reveal">One integrated journey on the Databricks Data Intelligence Platform turns unstructured voice into <span class="accent">€4.5M of protected margin</span> — governed end to end, served in real time, and reproducible on customer-safe synthetic data.</p>
+      <div class="ty-sign reveal">
+        <div class="ty-name">Emmanuele Bello</div>
+        <div class="ty-role">Delivery Solutions Architect, SEMEA · Databricks</div>
+        <div class="foot" style="margin-top:10px;">Lakeflow · Unity Catalog · Lakebase · Foundation Model API · Genie · Databricks Apps &nbsp;|&nbsp; Evidence: <span class="mono">evidence/model_metrics.json</span>, <span class="mono">evidence/model_run_output.txt</span>, <span class="mono">evidence/query_results.md</span></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  const deck = document.getElementById('deck');
+  const slides = [...deck.querySelectorAll('.slide')];
+  const dotsWrap = document.getElementById('dots');
+  const curEl = document.getElementById('cur');
+  const totEl = document.getElementById('tot');
+  const progress = document.getElementById('progress');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  let idx = 0, animating = false;
+  totEl.textContent = String(slides.length).padStart(2, '0');
+  slides.forEach((sl, i) => {
+    const b = document.createElement('button');
+    b.title = sl.dataset.label || ('Slide ' + (i + 1));
+    b.setAttribute('aria-label', 'Go to ' + (sl.dataset.label || ('slide ' + (i + 1))));
+    b.addEventListener('click', () => go(i));
+    dotsWrap.appendChild(b);
+  });
+  const dots = [...dotsWrap.children];
+  function update() {
+    curEl.textContent = String(idx + 1).padStart(2, '0');
+    progress.style.width = ((idx) / (slides.length - 1) * 100) + '%';
+    dots.forEach((d, i) => d.classList.toggle('on', i === idx));
+    slides.forEach((sl, i) => sl.classList.toggle('active', i === idx));
+    if (prevBtn) prevBtn.disabled = (idx === 0);
+    if (nextBtn) nextBtn.disabled = (idx === slides.length - 1);
+    document.body.classList.toggle('on-final', !!slides[idx].dataset.final);
+  }
+  function go(i) {
+    i = Math.max(0, Math.min(slides.length - 1, i));
+    if (i === idx) return;
+    idx = i; animating = true;
+    slides[idx].scrollIntoView({ behavior: 'smooth' });
+    update();
+    setTimeout(() => animating = false, 620);
+  }
+  if (prevBtn) prevBtn.addEventListener('click', () => go(idx - 1));
+  if (nextBtn) nextBtn.addEventListener('click', () => go(idx + 1));
+  window.addEventListener('keydown', (e) => {
+    if (['ArrowDown', 'PageDown', ' ', 'ArrowRight'].includes(e.key)) { e.preventDefault(); go(idx + 1); }
+    else if (['ArrowUp', 'PageUp', 'ArrowLeft'].includes(e.key)) { e.preventDefault(); go(idx - 1); }
+    else if (e.key === 'Home') { e.preventDefault(); go(0); }
+    else if (e.key === 'End') { e.preventDefault(); go(slides.length - 1); }
+  });
+  let tsx = 0, tsy = 0, tst = 0;
+  deck.addEventListener('touchstart', (e) => { const t = e.changedTouches[0]; tsx = t.clientX; tsy = t.clientY; tst = Date.now(); }, { passive: true });
+  deck.addEventListener('touchend', (e) => {
+    const t = e.changedTouches[0]; const dx = t.clientX - tsx, dy = t.clientY - tsy;
+    if (Date.now() - tst < 800 && Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.4) { go(idx + (dx < 0 ? 1 : -1)); }
+  }, { passive: true });
+  const io = new IntersectionObserver((entries) => {
+    if (animating) return;
+    entries.forEach(en => { if (en.isIntersecting && en.intersectionRatio > 0.55) { idx = slides.indexOf(en.target); update(); } });
+  }, { root: deck, threshold: [0.55] });
+  slides.forEach(sl => io.observe(sl));
+  (function(){ var btn=document.getElementById('themeBtn'); function cur(){ return document.documentElement.getAttribute('data-theme')||'dark'; } if(btn) btn.addEventListener('click', function(){ var n=cur()==='dark'?'light':'dark'; document.documentElement.setAttribute('data-theme',n); try{ localStorage.setItem('pln-theme',n); }catch(e){} }); })();
+  update();
+</script>

@@ -1,0 +1,13 @@
+{
+  "seed": 42,
+  "ref_date": "2026-06-30",
+  "n_customers": 15000,
+  "churn_rate": 0.2229,
+  "tables": {
+    "customers": 15000,
+    "consumption": 180000,
+    "contracts": 15000,
+    "calls": 10646,
+    "churn_labels": 15000
+  }
+}

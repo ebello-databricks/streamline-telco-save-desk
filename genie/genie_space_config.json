@@ -1,0 +1,19 @@
+{
+  "title": "Plenitude — Voice-to-Retention",
+  "description": "Natural-language access to B2C energy churn scores enriched with contact-centre voice signals. Ask about at-risk customers, churn drivers, and value at risk. All data is synthetic.",
+  "warehouse_id": "REPLACE_WITH_SQL_WAREHOUSE_ID",
+  "tables": [
+    "plenitude_febar.gold.churn_scores",
+    "plenitude_febar.gold.customer_features",
+    "plenitude_febar.silver.calls_enriched"
+  ],
+  "instructions": "This space serves Plenitude's B2C retail-energy retention team. `churn_scores` has one row per customer with churn_probability (0-1) and risk_band (Low/Medium/High/Critical). `customer_features` holds billing trend, contract, and Gen-AI voice features. `calls_enriched` has per-call sentiment, intent, and churn_signal derived from transcripts. 'At risk' means risk_band IN ('High','Critical'). 'Mentioned switching' means churn_mentions = 1 (customer_features) or churn_signal = 1 (calls_enriched). Value at risk = sum(monthly_bill_eur) * 12 for the selected customers. Region names are Italian (Lombardia, Lazio, ...). Always order at-risk lists by churn_probability descending.",
+  "sample_questions": [
+    "Show the top 20 critical-risk customers ordered by churn probability",
+    "Quali clienti in Lombardia con tariffa variabile hanno parlato di cambio fornitore?",
+    "What is the churn rate by region, highest first?",
+    "How much annual revenue is represented by the High and Critical bands?",
+    "Which customers had a negative billing call and a bill increase above 15%?",
+    "Average churn probability by contract type and payment method"
+  ]
+}

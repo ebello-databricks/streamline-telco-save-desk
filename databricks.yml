@@ -1,0 +1,88 @@
+# Databricks Asset Bundle — Plenitude "Voice-to-Retention" (FE Bar build)
+# Deploys the whole end-to-end journey into a workspace:
+#   Lakeflow pipeline · churn/serving/genie jobs · Lakebase · dashboard · app
+#
+#   databricks bundle validate
+#   databricks bundle deploy -t dev
+#   databricks bundle run plenitude_febar_pipeline -t dev   # then the churn job, app, etc.
+bundle:
+  name: plenitude-febar-voice-to-retention
+
+variables:
+  catalog:
+    description: Unity Catalog to build into
+    default: plenitude_febar
+  warehouse_id:
+    description: SQL warehouse id for the dashboard + Genie space
+    default: ""
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://adb-XXXXXXXXXXXX.XX.azuredatabricks.net   # <-- set your workspace
+
+resources:
+  # --- Lakeflow Declarative Pipeline (ingest -> silver) ---
+  pipelines:
+    plenitude_febar_pipeline:
+      name: plenitude-febar-ingest
+      catalog: ${var.catalog}
+      schema: silver
+      serverless: true
+      libraries:
+        - notebook:
+            path: ./notebooks/01_ingest_lakeflow.py
+
+  # --- Orchestration job: UC setup -> genai enrich -> model -> lakebase -> genie ---
+  jobs:
+    plenitude_febar_build:
+      name: plenitude-febar-build
+      tasks:
+        - task_key: unity_catalog
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ./notebooks/00_setup_unity_catalog.sql
+        - task_key: ingest
+          depends_on: [{task_key: unity_catalog}]
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.plenitude_febar_pipeline.id}
+        - task_key: genai_enrichment
+          depends_on: [{task_key: ingest}]
+          notebook_task: {notebook_path: ./notebooks/02_genai_enrichment.py}
+        - task_key: churn_model
+          depends_on: [{task_key: genai_enrichment}]
+          notebook_task: {notebook_path: ./notebooks/03_churn_model.py}
+        - task_key: lakebase_serving
+          depends_on: [{task_key: churn_model}]
+          notebook_task: {notebook_path: ./notebooks/04_lakebase_serving.py}
+        - task_key: genie_room
+          depends_on: [{task_key: churn_model}]
+          notebook_task: {notebook_path: ./notebooks/05_genie_room.py}
+
+  # --- Lakebase (managed Postgres) for operational serving ---
+  database_instances:
+    plenitude_febar:
+      name: plenitude-febar
+      capacity: CU_1
+
+  # --- AI/BI dashboard ---
+  dashboards:
+    plenitude_febar_dashboard:
+      display_name: Plenitude — Voice-to-Retention
+      file_path: ./dashboard/churn_dashboard.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+
+  # --- Databricks App (retention cockpit) ---
+  apps:
+    plenitude_retention:
+      name: plenitude-retention
+      description: Voice-to-Retention cockpit for the retention team
+      source_code_path: ./app
+      resources:
+        - name: lakebase
+          database:
+            instance_name: plenitude-febar
+            permission: CAN_CONNECT_AND_CREATE

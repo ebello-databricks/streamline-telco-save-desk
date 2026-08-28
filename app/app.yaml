@@ -1,0 +1,7 @@
+command: ["streamlit", "run", "app.py"]
+
+env:
+  - name: STREAMLIT_SERVER_HEADLESS
+    value: "true"
+  # Lakebase connection is injected as an app resource (see databricks.yml).
+  # When PGHOST is unset the app falls back to the committed parquet so it runs anywhere.

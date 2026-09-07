@@ -23,30 +23,62 @@ st.set_page_config(page_title="Plenitude · Voice-to-Retention", page_icon="⚡"
 BAND_COLOR = {"Critical": "#E5391D", "High": "#A9640A", "Medium": "#3C5A63", "Low": "#00875A"}
 MARGIN = 0.22  # gross-margin assumption for value-at-risk
 
+# Data source, in order of preference:
+#   1. Lakebase (PGHOST set)         — operational serving, Tier 2
+#   2. Unity Catalog via SQL warehouse (DATABRICKS_WAREHOUSE_ID set) — the deployed default
+#   3. committed parquet             — local dev fallback so the app runs anywhere
+GOLD_SCORES = os.environ.get("GOLD_SCORES_TABLE", "plenitude_febar.gold.churn_scores")
+ACTIONS_TABLE = os.environ.get("ACTIONS_TABLE", "plenitude_febar.gold.retention_actions")
+WAREHOUSE_ID = os.environ.get("DATABRICKS_WAREHOUSE_ID")
+
+
+def _uc_conn():
+    """Databricks SQL connection, authenticated as the app's service principal."""
+    from databricks import sql as dbsql
+    from databricks.sdk.core import Config
+    cfg = Config()  # picks up the app's injected credentials (or local CLI profile)
+    return dbsql.connect(
+        server_hostname=cfg.host.replace("https://", "").rstrip("/"),
+        http_path=f"/sql/1.0/warehouses/{WAREHOUSE_ID}",
+        credentials_provider=lambda: cfg.authenticate)
+
+
+def _pg_conn():
+    import psycopg2
+    return psycopg2.connect(
+        host=os.environ["PGHOST"], dbname="databricks_postgres",
+        user=os.environ["PGUSER"], password=os.environ["PGPASSWORD"], sslmode="require")
+
 
 @st.cache_data(ttl=300)
 def load_scores() -> pd.DataFrame:
-    """Lakebase (Postgres) in production; committed parquet as local fallback."""
     if os.environ.get("PGHOST"):
-        import psycopg2
-        conn = psycopg2.connect(
-            host=os.environ["PGHOST"], dbname="databricks_postgres",
-            user=os.environ["PGUSER"], password=os.environ["PGPASSWORD"], sslmode="require")
-        return pd.read_sql("SELECT * FROM churn_scores_synced", conn)
+        with _pg_conn() as conn:
+            return pd.read_sql("SELECT * FROM churn_scores_synced", conn)
+    if WAREHOUSE_ID:
+        with _uc_conn() as conn:
+            return pd.read_sql(f"SELECT * FROM {GOLD_SCORES}", conn)
     p = Path(__file__).resolve().parents[1] / "data" / "output" / "gold_churn_scores.parquet"
     return pd.read_parquet(p)
 
 
 def log_action(customer_id, agent, action, offer, notes):
     if os.environ.get("PGHOST"):
-        import psycopg2
-        conn = psycopg2.connect(
-            host=os.environ["PGHOST"], dbname="databricks_postgres",
-            user=os.environ["PGUSER"], password=os.environ["PGPASSWORD"], sslmode="require")
+        conn = _pg_conn()
         cur = conn.cursor()
         cur.execute("INSERT INTO retention_actions (customer_id,agent,action,offer_eur,notes)"
                     " VALUES (%s,%s,%s,%s,%s)", (customer_id, agent, action, offer, notes))
         conn.commit()
+    elif WAREHOUSE_ID:
+        with _uc_conn() as conn:
+            cur = conn.cursor()
+            cur.execute(f"CREATE TABLE IF NOT EXISTS {ACTIONS_TABLE} "
+                        "(customer_id STRING, agent STRING, action STRING, offer_eur INT, "
+                        "notes STRING, logged_at TIMESTAMP)")
+            cur.execute(f"INSERT INTO {ACTIONS_TABLE} "
+                        "(customer_id,agent,action,offer_eur,notes,logged_at) "
+                        "VALUES (?,?,?,?,?, current_timestamp())",
+                        [customer_id, agent, action, int(offer), notes])
     st.session_state.setdefault("logged", []).append((customer_id, action, offer))
 
 

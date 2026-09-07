@@ -3,5 +3,11 @@ command: ["streamlit", "run", "app.py"]
 env:
   - name: STREAMLIT_SERVER_HEADLESS
     value: "true"
-  # Lakebase connection is injected as an app resource (see databricks.yml).
-  # When PGHOST is unset the app falls back to the committed parquet so it runs anywhere.
+  # Data source resolution (see app.py):
+  #   1. Lakebase (PGHOST, injected as an app resource — Tier 2)
+  #   2. Unity Catalog via this SQL warehouse — the deployed default
+  #   3. committed parquet — local dev fallback
+  - name: DATABRICKS_WAREHOUSE_ID
+    value: "c8d3657be7ec0f0f"
+  - name: GOLD_SCORES_TABLE
+    value: "plenitude_febar.gold.churn_scores"

@@ -14,14 +14,14 @@ variables:
     default: plenitude_febar
   warehouse_id:
     description: SQL warehouse id for the dashboard + Genie space
-    default: ""
+    default: "c8d3657be7ec0f0f"   # plenitude-febar-wh on e2-demo-field-eng
 
 targets:
   dev:
     mode: development
     default: true
     workspace:
-      host: https://adb-XXXXXXXXXXXX.XX.azuredatabricks.net   # <-- set your workspace
+      host: https://e2-demo-field-eng.cloud.databricks.com
 
 resources:
   # --- Lakeflow Declarative Pipeline (ingest -> silver) ---

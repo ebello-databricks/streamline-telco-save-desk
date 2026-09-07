@@ -1,7 +1,7 @@
 {
   "title": "Plenitude — Voice-to-Retention",
   "description": "Natural-language access to B2C energy churn scores enriched with contact-centre voice signals. Ask about at-risk customers, churn drivers, and value at risk. All data is synthetic.",
-  "warehouse_id": "REPLACE_WITH_SQL_WAREHOUSE_ID",
+  "warehouse_id": "c8d3657be7ec0f0f",
   "tables": [
     "plenitude_febar.gold.churn_scores",
     "plenitude_febar.gold.customer_features",

@@ -1,6 +1,6 @@
 ========================================================================
 STREAMLINE TELCO SAVE DESK  —  local pipeline run (synthetic data)
-run_ts=2026-10-28T07:51:17  ref_date=2026-09-30
+run_ts=2026-10-28T08:40:01  ref_date=2026-09-30
 ========================================================================
 
 [1 silver ] expectations applied (rows before -> after):
@@ -44,10 +44,10 @@ run_ts=2026-10-28T07:51:17  ref_date=2026-09-30
             driver mix (High+Critical) = {'price': 704, 'network': 683, 'contract': 434, 'service': 4}
 
 [6 serve  ] OLTP serving (SQLite stand-in for Lakebase Postgres): 20,000 rows loaded
-            500 point lookups by subscriber_id: avg 0.012 ms
-            agent write-back -> save_actions: [(1, 'STL102197', 'AG017', 'Loyalty price match (-20% for 12 months)', 'accepted', '2026-10-28T07:51:29')]
+            500 point lookups by subscriber_id: avg 0.025 ms
+            agent write-back -> save_actions: [(1, 'STL102197', 'AG017', 'Loyalty price match (-20% for 12 months)', 'accepted', '2026-10-28T08:40:14')]
 
 [7 genie  ] answered 5 business questions -> evidence/query_results.md
 [8 app    ] exported top 300 save-list rows -> app/demo_data.js
 
-[done     ] 12.0s — evidence/{model_metrics.json,model_run_output.txt,query_results.md}
+[done     ] 12.7s — evidence/{model_metrics.json,model_run_output.txt,query_results.md}

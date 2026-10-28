@@ -193,11 +193,12 @@ const G = [
 ];
 G.forEach((g,i) => chips.insertAdjacentHTML("beforeend", `<span class="chip" data-i="${i}">${g.q}</span>`));
 chips.querySelectorAll(".chip").forEach(c => c.onclick = () => { gq.value = G[c.dataset.i].q; ask(); });
+const esc = t => t.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function ask(){
   const s = gq.value.toLowerCase(); if (!s) return;
   let best = G.map(g => [g, g.kw.filter(w => s.includes(w)).length]).sort((a,b) => b[1]-a[1])[0];
   const g = best[1] ? best[0] : null;
-  gout.innerHTML = g ? `<div class="msg"><div class="q">${gq.value}</div><div class="ans">${g.a}</div>
+  gout.innerHTML = g ? `<div class="msg"><div class="q">${esc(gq.value)}</div><div class="ans">${g.a}</div>
     <div class="muted">Generated SQL</div><pre>${g.sql}</pre><div class="muted">Result</div><pre>${g.t}</pre></div>`
     : `<div class="msg muted">In this offline demo, try one of the suggested questions.</div>`;
 }

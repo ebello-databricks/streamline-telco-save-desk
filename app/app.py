@@ -40,14 +40,14 @@ def _pg():
 def load() -> pd.DataFrame:
     if os.environ.get("PGHOST"):
         with _pg() as c:
-            return pd.read_sql("SELECT * FROM save_list_synced", c)
+            return pd.read_sql("SELECT * FROM gold.save_list_synced", c)
     return pd.read_parquet(LOCAL)
 
 
 def log_action(sub, agent, offer, outcome, notes):
     if os.environ.get("PGHOST"):
         with _pg() as c:
-            c.execute("INSERT INTO save_actions(subscriber_id,agent_id,offer,outcome,notes) VALUES (%s,%s,%s,%s,%s)",
+            c.execute("INSERT INTO save_desk.save_actions(subscriber_id,agent_id,offer,outcome,notes) VALUES (%s,%s,%s,%s,%s)",
                       (sub, agent, offer, outcome, notes))
     st.session_state.setdefault("actions", []).append((sub, offer, outcome))
 
@@ -79,8 +79,9 @@ if sid:
     a, b = st.columns([2, 1])
     a.subheader(f"{sid} · {r.plan} · {r.region}")
     a.write(f"**Churn probability:** {r.churn_probability:.0%} ({r.risk_band}) · **Value at risk:** €{r.value_at_risk_eur:,.0f}")
-    a.write("**Why they may leave:** " + r.top_reasons)
-    a.info(f"**Next best offer:** {r.next_best_offer}\n\n{r.get('talk_track', '')}")
+    a.write(f"**Why they may leave:** {r.top_reasons or 'n/a'}")
+    track = r.get("talk_track")
+    a.info(f"**Next best offer:** {r.next_best_offer}" + (f"\n\n{track}" if isinstance(track, str) and track else ""))
     with b.form("log"):
         outcome = st.radio("Outcome", ["accepted", "declined", "callback", "no_answer"])
         notes = st.text_input("Notes")

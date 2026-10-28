@@ -18,7 +18,9 @@ import json
 from databricks.sdk import WorkspaceClient
 w = WorkspaceClient()
 cfg = json.load(open("../genie/genie_space_config.json"))
-SPACE_ID = cfg.get("space_id") or dbutils.widgets.get("space_id")
+dbutils.widgets.text("space_id", cfg.get("space_id", ""), "Genie space id")
+SPACE_ID = dbutils.widgets.get("space_id")
+assert SPACE_ID, "Create the Genie space first (see markdown above) and pass its id"
 
 for q in cfg["sample_questions"][:3]:
     msg = w.genie.start_conversation_and_wait(SPACE_ID, q)

@@ -13,6 +13,9 @@ variables:
     default: streamline_telco
   warehouse_id:
     description: Serverless SQL warehouse for SQL tasks and Genie
+  app_sp_client_id:
+    description: Client id of the save-desk app service principal (after first app deploy)
+    default: ""
 
 targets:
   dev:
@@ -47,7 +50,9 @@ resources:
           notebook_task: {notebook_path: ./notebooks/03_churn_model.py}
         - task_key: lakebase_sync
           depends_on: [{task_key: churn_model}]
-          notebook_task: {notebook_path: ./notebooks/04_lakebase_serving.py}
+          notebook_task:
+            notebook_path: ./notebooks/04_lakebase_serving.py
+            base_parameters: {app_sp_client_id: "${var.app_sp_client_id}"}
 
   database_instances:
     save_desk_db:

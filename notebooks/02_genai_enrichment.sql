@@ -23,9 +23,9 @@ INSERT INTO streamline_telco.silver.care_calls_enriched
 SELECT c.call_id, c.subscriber_id, c.call_ts, c.duration_sec, c.transcript,
   ai_analyze_sentiment(c.transcript)                                              AS sentiment,
   ai_classify(c.transcript, ARRAY('network','billing','retention','device','general')) AS intent,
-  CAST(ai_query('databricks-meta-llama-3-3-70b-instruct',
+  COALESCE(TRY_CAST(TRIM(ai_query('databricks-meta-llama-3-3-70b-instruct',
        CONCAT('You work for a mobile operator. Does this customer care call show intent to leave, ',
-              'cancel, port the number or switch provider? Answer only 1 or 0.\nCall: ', c.transcript)) AS INT)
+              'cancel, port the number or switch provider? Answer only 1 or 0.\nCall: ', c.transcript))) AS INT), 0)
                                                                                   AS switch_intent,
   current_timestamp()                                                             AS enriched_at
 FROM streamline_telco.silver.care_calls c

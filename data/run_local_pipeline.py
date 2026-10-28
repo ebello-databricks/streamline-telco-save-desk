@@ -83,7 +83,7 @@ def enrich_calls(calls: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # 3. FEATURE TABLE (GOLD)
 # ---------------------------------------------------------------------------
-def build_features(subs, contr, usage, enr) -> pd.DataFrame:
+def build_features(subs, contr, usage, enr, ref_date=REF_DATE) -> pd.DataFrame:
     u = usage.sort_values(["subscriber_id", "month"])
     last2 = u.groupby("subscriber_id").tail(2).groupby("subscriber_id")
     first4 = u.groupby("subscriber_id").head(4).groupby("subscriber_id")
@@ -108,7 +108,7 @@ def build_features(subs, contr, usage, enr) -> pd.DataFrame:
     cc = ["n_calls_60d", "n_negative_calls", "n_network_calls", "n_billing_calls", "n_retention_calls", "switch_intent"]
     f[cc] = f[cc].fillna(0).astype(int)
     f["avg_sentiment"] = f["avg_sentiment"].fillna(0.05)
-    f["days_to_commitment_end"] = pd.to_datetime(f.commitment_end_date).dt.date.apply(lambda d: (d - REF_DATE).days)
+    f["days_to_commitment_end"] = pd.to_datetime(f.commitment_end_date).dt.date.apply(lambda d: (d - ref_date).days)
     f["out_of_contract"] = (f.days_to_commitment_end < 0).astype(int)
     f["commitment_ends_60d"] = f.days_to_commitment_end.between(0, 59).astype(int)
     f["from_comparison_site"] = (f.acquisition_channel == "comparison_site").astype(int)

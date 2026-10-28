@@ -1,5 +1,5 @@
 {
-  "run_ts": "2026-10-28T07:51:29",
+  "run_ts": "2026-10-28T08:40:14",
   "model": "GradientBoostingClassifier(n_estimators=250,max_depth=3,lr=0.06)",
   "n_subscribers": 20000,
   "n_features": 21,

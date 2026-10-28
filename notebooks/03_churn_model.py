@@ -17,9 +17,11 @@ import mlflow, pandas as pd, numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import roc_auc_score, average_precision_score
-import importlib.util, sys
+import importlib.util, sys, datetime as dt
 
 CAT = "streamline_telco"
+dbutils.widgets.text("ref_date", "", "Scoring date (blank = today)")
+REF = dt.date.fromisoformat(dbutils.widgets.get("ref_date") or dt.date.today().isoformat())
 mlflow.set_registry_uri("databricks-uc")
 
 # Reuse the exact feature/offer logic from the repo so local evidence == workspace run
@@ -35,7 +37,7 @@ enr = (spark.table(f"{CAT}.silver.care_calls_enriched")
        .toPandas())
 labels = spark.table(f"{CAT}.silver.churn_labels").toPandas()
 
-feats = pipe.build_features(subs, contr, usage, enr).merge(labels, on="subscriber_id")
+feats = pipe.build_features(subs, contr, usage, enr, ref_date=REF).merge(labels, on="subscriber_id")
 spark.createDataFrame(feats).write.mode("overwrite").option("overwriteSchema", "true") \
      .saveAsTable(f"{CAT}.gold.subscriber_features")
 
@@ -71,14 +73,23 @@ cols = [c for c in ["subscriber_id", "region", "segment", "plan", "lines", "tenu
         "annual_value_eur", "churn_probability", "risk_band", "value_at_risk_eur", "driver", "top_reasons",
         "next_best_offer", "offer_cost_eur", "dropped_calls_l2m", "dl_speed_l2m", "bill_trend_pct",
         "days_to_commitment_end", "switch_intent"]]
+# Stable schema + MERGE (not overwrite) so the Lakebase synced table's CDF source never changes shape
 spark.createDataFrame(feats[cols]).write.mode("overwrite").option("overwriteSchema", "true") \
-     .saveAsTable(f"{CAT}.gold.save_list")
+     .saveAsTable(f"{CAT}.gold.save_list_stage")
+spark.sql(f"""CREATE TABLE IF NOT EXISTS {CAT}.gold.save_list
+  TBLPROPERTIES (delta.enableChangeDataFeed = true)
+  AS SELECT *, CAST(NULL AS STRING) AS talk_track FROM {CAT}.gold.save_list_stage WHERE 1 = 0""")
+sets = ", ".join(f"t.{c} = s.{c}" for c in cols if c != "subscriber_id")
+spark.sql(f"""MERGE INTO {CAT}.gold.save_list t USING {CAT}.gold.save_list_stage s
+  ON t.subscriber_id = s.subscriber_id
+  WHEN MATCHED THEN UPDATE SET {sets}
+  WHEN NOT MATCHED THEN INSERT ({", ".join(cols)}) VALUES ({", ".join("s." + c for c in cols)})
+  WHEN NOT MATCHED BY SOURCE THEN DELETE""")
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC -- Gen AI talk track for the agent, only for the High/Critical subscribers (keeps token cost low)
-# MAGIC ALTER TABLE streamline_telco.gold.save_list ADD COLUMNS (talk_track STRING);
+# MAGIC -- Gen AI talk track for the agent, only for High/Critical subscribers (keeps token cost low)
 # MAGIC MERGE INTO streamline_telco.gold.save_list t
 # MAGIC USING (
 # MAGIC   SELECT subscriber_id, ai_query('databricks-meta-llama-3-3-70b-instruct',
@@ -88,5 +99,3 @@ spark.createDataFrame(feats[cols]).write.mode("overwrite").option("overwriteSche
 # MAGIC   FROM streamline_telco.gold.save_list WHERE risk_band IN ('High','Critical')
 # MAGIC ) s ON t.subscriber_id = s.subscriber_id
 # MAGIC WHEN MATCHED THEN UPDATE SET t.talk_track = s.talk_track;
-# MAGIC
-# MAGIC ALTER TABLE streamline_telco.gold.save_list SET TBLPROPERTIES (delta.enableChangeDataFeed = true);

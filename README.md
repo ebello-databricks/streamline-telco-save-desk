@@ -60,7 +60,7 @@ ROC-AUC from **0.783 → 0.729** (top-10% precision 56% → 42%).
 | ML: intelligence | `notebooks/03_churn_model.py` (features, MLflow, UC model, save list, ai_query talk track) |
 | Lakebase: serving | `notebooks/04_lakebase_serving.py` (synced table + `save_actions` write-back) |
 | Genie agent | `genie/genie_space_config.json`, `notebooks/05_genie_agent.py` |
-| Databricks App | `app/app.py` (Streamlit, Lakebase-backed) · `app/demo.html` (click-through demo twin) |
+| Databricks App | `app/app.py` (Streamlit, Lakebase-backed) · `app/simulator.html` (workspace simulator for the live demo) · `app/demo.html` (app-only twin) |
 | One deployable unit | `databricks.yml` (pipeline, nightly job, Lakebase instance, app) |
 
 ## 3. Evidence it ran (text, committed)
@@ -79,7 +79,8 @@ Reproduce (~15 s):
 ```bash
 uv venv --python 3.12 .venv && . .venv/bin/activate && uv pip install numpy pandas scikit-learn pyarrow
 python data/generate_synthetic_data.py && python data/run_local_pipeline.py
-open app/demo.html          # click-through Save Desk
+python data/export_simulator_data.py
+open app/simulator.html     # Databricks workspace simulator with the Save Desk app
 ```
 
 ## 4. Decisions, AI usage, demo

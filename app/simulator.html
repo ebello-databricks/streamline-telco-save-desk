@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Streamline Telco · Save Desk · Databricks</title>
+<!-- Workspace simulator for the live demo. Replays the committed run output
+     (demo_data.js = top 300 rows of gold.save_list, sim_data.js = pipeline, catalog,
+     calls, MLflow metrics, run log). Synthetic data; Streamline Telco is fictional. -->
+<script src="demo_data.js"></script>
+<script src="sim_data.js"></script>
+<style>
+:root{--navy:#1B3139;--navy2:#0B2026;--lava:#FF3621;--coral:#FF5F46;--oat:#F9F7F4;--oat2:#EEEDE9;--line:#E4E2DD;
+      --ink:#1B3139;--body:#3A3838;--mute:#5F7281;--teal:#0E8A8A;--green:#00A972;--amber:#E8A33D;--blue:#2272B4;--side:#F7F6F3}
+*{box-sizing:border-box} html,body{margin:0;height:100%}
+body{font-family:"DM Sans",-apple-system,Segoe UI,Roboto,sans-serif;color:var(--body);background:#fff;font-size:14px;overflow:hidden}
+button{font:inherit;cursor:pointer}
+/* ---------- workspace chrome ---------- */
+.top{height:48px;background:var(--navy);display:flex;align-items:center;gap:16px;padding:0 16px;color:#fff}
+.top img.logo{height:20px}
+.top .ws{font-size:13px;color:#B9C7CC;border-left:1px solid #34505A;padding-left:14px}
+.top .search{margin-left:18px;flex:0 1 480px;background:#26414A;border-radius:6px;padding:7px 12px;color:#9FB2B8;font-size:13px}
+.top .right{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:13px;color:#B9C7CC}
+.top .av{width:28px;height:28px;border-radius:50%;background:var(--lava);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+.shell{display:flex;height:calc(100% - 48px)}
+nav.side{width:212px;background:var(--side);border-right:1px solid var(--line);padding:10px 8px;overflow:auto;flex:0 0 212px}
+nav.side .grp{font-size:11px;font-weight:700;color:var(--mute);letter-spacing:.5px;text-transform:uppercase;margin:14px 10px 6px}
+nav.side a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--ink);text-decoration:none;font-size:13.5px;cursor:pointer}
+nav.side a:hover{background:#ECEAE5} nav.side a.on{background:#E3E9EB;font-weight:600}
+nav.side a .ic{width:18px;text-align:center;color:var(--mute)}
+nav.side a .new{margin-left:auto;font-size:10px;background:var(--lava);color:#fff;border-radius:4px;padding:1px 5px}
+main{flex:1;overflow:auto;background:#fff}
+.page{display:none;padding:22px 28px 60px} .page.on{display:block}
+.crumb{font-size:12.5px;color:var(--mute);margin-bottom:6px} .crumb b{color:var(--ink)}
+h1{font-size:22px;color:var(--ink);margin:0 0 4px;font-weight:600} .sub{color:var(--mute);margin-bottom:18px}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:8px 0 16px}
+.tabs button{background:none;border:0;padding:9px 14px;color:var(--mute);border-bottom:2px solid transparent}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--lava);font-weight:600}
+.card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+.grid{display:grid;gap:14px}
+.feat{font-weight:700;color:var(--lava)}
+.pill{display:inline-block;font-size:11.5px;border-radius:999px;padding:2px 9px;background:var(--oat2);color:var(--ink);font-weight:600}
+.pill.ok{background:#DDF3EA;color:#08724F} .pill.run{background:#E3EEF8;color:var(--blue)} .pill.wait{background:#F1F1EF;color:var(--mute)}
+.pill.warn{background:#FFF1CC;color:#8A5B00} .pill.tag{background:#FFE3DE;color:#B42318}
+.btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 14px;color:var(--ink)}
+.btn.p{background:var(--blue);border-color:var(--blue);color:#fff} .btn.l{background:var(--lava);border-color:var(--lava);color:#fff}
+table.t{width:100%;border-collapse:collapse;font-size:13px} table.t th{text-align:left;color:var(--mute);font-weight:600;padding:7px 9px;border-bottom:1px solid var(--line);background:#FAFAF8;position:sticky;top:0}
+table.t td{padding:7px 9px;border-bottom:1px solid #F0EFEB;vertical-align:top}
+.mono{font-family:"DM Mono",ui-monospace,Menlo,monospace;font-size:12.5px}
+pre.code{background:#0F1E24;color:#D4E4EA;border-radius:8px;padding:14px 16px;font-size:12.5px;line-height:1.5;overflow:auto;margin:0;white-space:pre-wrap}
+pre.code .k{color:#FF8A7A} pre.code .f{color:#7FD1C7} pre.code .s{color:#F2C879} pre.code .c{color:#7E9AA3}
+.note{font-size:12px;color:var(--mute);margin-top:10px}
+/* ---------- overview journey ---------- */
+.journey{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin:6px 0 18px}
+.jstep{border:1px solid var(--line);border-radius:10px;padding:14px 12px;cursor:pointer;background:#fff;transition:.15s;position:relative}
+.jstep:hover{border-color:var(--lava);box-shadow:0 6px 18px rgba(27,49,57,.1);transform:translateY(-2px)}
+.jstep .n{font-size:11px;color:var(--mute);font-weight:700} .jstep b{display:block;color:var(--ink);margin:4px 0 2px;font-size:14.5px}
+.jstep .feat{font-size:12.5px} .jstep small{display:block;color:var(--mute);font-size:12px;margin-top:6px;line-height:1.35}
+.jstep:after{content:"→";position:absolute;right:-10px;top:40%;color:var(--lava);font-weight:700}
+.jstep:last-child:after{content:""}
+.kp{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kp .card .v{font-size:26px;font-weight:700;color:var(--ink);margin-top:2px} .kp .card .l{font-size:12.5px;color:var(--mute)}
+/* ---------- job DAG ---------- */
+.dag{display:flex;align-items:center;gap:0;margin:8px 0 18px;flex-wrap:wrap}
+.task{border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:150px;background:#fff}
+.task .tt{font-weight:600;color:var(--ink);font-size:13.5px} .task .ty{font-size:11.5px;color:var(--mute);margin:2px 0 6px}
+.task.run{border-color:var(--blue);box-shadow:0 0 0 3px #E3EEF8} .task.ok{border-color:#9ADBC2}
+.edge{width:28px;height:2px;background:#C9CFD1}
+.bar{height:6px;background:#EEF0F1;border-radius:3px;overflow:hidden;margin-top:8px} .bar i{display:block;height:100%;width:0;background:var(--blue);transition:width .6s}
+.flowg{display:grid;grid-template-columns:1fr 84px 1fr 84px 1fr;align-items:center;gap:6px}
+.tbl{border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin:6px 0;background:#fff;font-size:12.5px}
+.tbl b{color:var(--ink)} .tbl .r{float:right;color:var(--mute)}
+.arrowc{color:#9AA7AB;text-align:center;font-size:18px}
+.console{background:#0F1E24;color:#C9DCE2;border-radius:8px;padding:12px 14px;height:260px;overflow:auto;font-family:"DM Mono",ui-monospace,Menlo,monospace;font-size:12px;white-space:pre}
+/* ---------- catalog ---------- */
+.cat{display:grid;grid-template-columns:250px 1fr;gap:16px}
+.tree{border:1px solid var(--line);border-radius:8px;padding:8px;font-size:13px;height:fit-content}
+.tree div{padding:5px 8px;border-radius:5px;cursor:pointer} .tree div:hover{background:var(--oat)} .tree div.on{background:#E3E9EB;font-weight:600}
+.tree .l1{padding-left:22px} .tree .l2{padding-left:40px} .tree .hd{cursor:default;font-weight:600;color:var(--ink)} .tree .hd:hover{background:none}
+.lineage{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.lnode{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;background:#fff} .lnode.me{border-color:var(--lava);box-shadow:0 0 0 3px #FFE3DE}
+/* ---------- sql ---------- */
+.sent{font-weight:600} .sent.negative{color:#C0362C} .sent.positive{color:#08724F} .sent.neutral{color:var(--mute)}
+/* ---------- mlflow ---------- */
+.fi{display:grid;grid-template-columns:200px 1fr 50px;gap:8px;align-items:center;margin:5px 0;font-size:13px}
+.fi .b{height:14px;background:var(--lava);border-radius:3px} .fi .b.g{background:#C9CFD1}
+/* ---------- app frame ---------- */
+.frame{border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 8px 28px rgba(27,49,57,.10)}
+.urlbar{background:#F2F1EE;border-bottom:1px solid var(--line);padding:7px 12px;display:flex;gap:10px;align-items:center;font-size:12.5px;color:var(--mute)}
+.urlbar .dots i{display:inline-block;width:10px;height:10px;border-radius:50%;background:#D6D3CC;margin-right:5px}
+.urlbar .u{background:#fff;border:1px solid var(--line);border-radius:6px;padding:4px 10px;flex:1}
+.apphd{background:#0B2340;color:#fff;display:flex;align-items:center;gap:16px;padding:12px 20px}
+.apphd .lg{font-weight:700;font-size:17px} .apphd .lg span{color:#5FD3C6}
+.apphd nav button{background:transparent;border:0;color:#B9C7D6;padding:6px 12px;border-radius:7px} .apphd nav button.on{background:#1C3A5E;color:#fff}
+.apphd .who{margin-left:auto;font-size:12px;color:#B9C7D6}
+.appbody{padding:16px 20px;background:#F5F7F9}
+.akpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.akpi>div{background:#fff;border:1px solid #E3E8EC;border-radius:10px;padding:12px 14px} .akpi .l{font-size:12px;color:var(--mute)} .akpi .v{font-size:24px;font-weight:700;color:var(--ink)} .akpi .s{font-size:11.5px;color:var(--mute)}
+.arow{display:grid;grid-template-columns:1.5fr 1fr;gap:14px}
+.acard{background:#fff;border:1px solid #E3E8EC;border-radius:10px;padding:14px 16px}
+.acard h3{margin:0 0 10px;font-size:15px;color:var(--ink)}
+.filters{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap} select,input[type=text]{font:inherit;font-size:13px;padding:6px 9px;border:1px solid #DDE3E7;border-radius:7px;background:#fff}
+.scroll{max-height:440px;overflow:auto}
+tr.sel td{background:#E9F6F5} #tb tr{cursor:pointer} #tb tr:hover td{background:#F4FAFA}
+.band{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:600;color:#fff}
+.Critical{background:var(--lava)} .High{background:var(--amber)} .Medium{background:#7A8D99} .Low{background:var(--green)}
+.drv{font-size:11.5px;padding:2px 7px;border-radius:6px;background:#EEF2F5}
+.big{font-size:30px;font-weight:700;color:var(--ink)} .reason{display:flex;gap:8px;margin:5px 0} .reason:before{content:"●";color:var(--lava);font-size:9px;margin-top:4px}
+.offer{background:#E9F6F5;border-left:4px solid var(--teal);padding:10px 12px;border-radius:8px;margin:10px 0;font-size:13.5px}
+.pbar{height:7px;background:#EEF2F5;border-radius:4px;overflow:hidden} .pbar i{display:block;height:100%;background:var(--lava)}
+.toast{font-size:12.5px;color:var(--green);min-height:18px;margin-top:8px}
+/* ---------- genie ---------- */
+.genie{display:grid;grid-template-columns:260px 1fr;gap:16px}
+.chip{display:block;width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 11px;margin-bottom:8px;font-size:13px;color:var(--ink)}
+.chip:hover{border-color:var(--lava)}
+.chat{border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;height:calc(100vh - 230px);min-height:420px}
+.msgs{flex:1;overflow:auto;padding:16px}
+.mu{background:#E3E9EB;border-radius:10px;padding:9px 12px;margin:0 0 12px auto;max-width:70%;width:fit-content;color:var(--ink)}
+.mg{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:14px;max-width:92%}
+.mg .who{font-size:12px;font-weight:700;color:var(--lava);margin-bottom:6px}
+.ask{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)} .ask input{flex:1;padding:10px 12px;font-size:14px}
+.typing:after{content:"▍";animation:b 1s infinite} @keyframes b{50%{opacity:0}}
+details summary{cursor:pointer;color:var(--blue);font-size:12.5px;margin:8px 0}
+/* ---------- presenter guide ---------- */
+#guide{position:fixed;left:8px;bottom:10px;width:196px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 34px rgba(0,0,0,.18);font-size:13px;z-index:20}
+#guide .gh{background:var(--navy);color:#fff;border-radius:12px 12px 0 0;padding:9px 12px;display:flex;align-items:center;gap:8px}
+#guide .gh b{font-size:13px} #guide .gh button{margin-left:auto;background:none;border:0;color:#B9C7CC}
+#guide ol{margin:0;padding:8px 8px 10px 24px;max-height:420px;font-size:12px;overflow:auto} #guide li{margin:5px 0;cursor:pointer} #guide li:hover{color:var(--lava)}
+#guide li.done{color:var(--mute);text-decoration:line-through}
+#guide.min ol{display:none}
+.simtag{font-size:11px;color:#9FB2B8}
+</style>
+</head>
+<body>
+<div class="top">
+  <img class="logo" id="logo" alt="Databricks">
+  <span class="ws">streamline-telco-prod</span>
+  <div class="search">Search data, notebooks, recents and more…</div>
+  <div class="right"><span class="simtag">Demo workspace · synthetic data</span><span>?</span><div class="av">SD</div></div>
+</div>
+<div class="shell">
+<nav class="side" id="side">
+  <a data-p="home" class="on"><span class="ic">⌂</span>Solution overview</a>
+  <div class="grp">Data engineering</div>
+  <a data-p="jobs"><span class="ic">⟳</span>Jobs &amp; Pipelines</a>
+  <a data-p="catalog"><span class="ic">▤</span>Catalog</a>
+  <div class="grp">AI / ML</div>
+  <a data-p="sql"><span class="ic">✦</span>AI Functions</a>
+  <a data-p="mlflow"><span class="ic">◎</span>Experiments &amp; Models</a>
+  <div class="grp">Serving &amp; apps</div>
+  <a data-p="lakebase"><span class="ic">⛁</span>Lakebase</a>
+  <a data-p="genie"><span class="ic">✧</span>Genie</a>
+  <a data-p="app"><span class="ic">▣</span>Apps<span class="new">LIVE</span></a>
+</nav>
+<main>
+
+<!-- ================= HOME ================= -->
+<section class="page on" id="p-home">
+  <div class="crumb">streamline-telco-prod › <b>Save Desk solution</b></div>
+  <h1>Save Desk: churn early warning for Streamline Telco</h1>
+  <div class="sub">One governed journey from raw data to the retention agent's screen, on the Databricks Data Intelligence Platform. Click any step.</div>
+  <div class="journey" id="journey"></div>
+  <div class="kp" id="homekpi"></div>
+  <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:14px">
+    <div class="card"><b style="color:var(--ink)">The business problem</b><p style="margin:8px 0 0;line-height:1.5">~16.8% of postpaid subscribers leave each year. Customers say it on care calls, the network degrades, bills jump, but the signals sit in three systems and retention reacts only at the porting request.</p></div>
+    <div class="card"><b style="color:var(--ink)">What runs every night at 02:00</b><p style="margin:8px 0 0;line-height:1.5"><span class="feat">Lakeflow</span> ingests → <span class="feat">AI Functions</span> read every call → <span class="feat">MLflow</span> model scores every subscriber → <span class="feat">Lakebase</span> serves the save list → agents act in the <span class="feat">Databricks App</span>; managers ask <span class="feat">Genie</span>. All governed by <span class="feat">Unity Catalog</span>, deployed as one <span class="feat">Asset Bundle</span>.</p></div>
+  </div>
+</section>
+
+<!-- ================= JOBS ================= -->
+<section class="page" id="p-jobs">
+  <div class="crumb">Jobs &amp; Pipelines › <b>save-desk-nightly</b></div>
+  <div style="display:flex;align-items:center;gap:12px"><h1>save-desk-nightly</h1><span class="pill" id="jobstate">Scheduled · daily 02:00 Europe/Rome</span><button class="btn p" id="runjob" style="margin-left:auto">▶ Run now</button></div>
+  <div class="sub"><span class="feat">Lakeflow Jobs</span> orchestrates the whole journey · deployed from <span class="mono">databricks.yml</span> (<span class="feat">Databricks Asset Bundles</span>)</div>
+  <div class="tabs" id="jobtabs"><button class="on" data-t="dag">Tasks</button><button data-t="pipe">Lakeflow pipeline: save-desk-ingest</button><button data-t="log">Run output</button></div>
+  <div id="jt-dag"><div class="dag" id="dag"></div>
+    <div class="card" id="taskinfo"><b style="color:var(--ink)">Click a task</b> to see what it does and which Databricks feature runs it.</div></div>
+  <div id="jt-pipe" style="display:none">
+    <div class="sub">A <span class="feat">Lakeflow Declarative Pipeline</span> (serverless). <span class="feat">Auto Loader</span> picks up new files incrementally from the Unity Catalog Volume; <span class="feat">expectations</span> enforce data quality on the way to silver.</div>
+    <div class="flowg" id="pipeg"></div>
+    <div class="card" style="margin-top:14px"><b style="color:var(--ink)">Data quality expectations</b>
+      <table class="t" style="margin-top:8px"><tr><th>Table</th><th>Expectation</th><th>Action</th><th>Result</th></tr>
+      <tr><td>subscribers</td><td class="mono">subscriber_id IS NOT NULL</td><td>drop row</td><td><span class="pill ok">20,000 passed · 0 dropped</span></td></tr>
+      <tr><td>contracts</td><td class="mono">monthly_price_eur &gt; 0</td><td>drop row</td><td><span class="pill ok">20,000 passed · 0 dropped</span></td></tr>
+      <tr><td>usage</td><td class="mono">bill_amount_eur &gt; 0 AND &lt; 1000</td><td>drop row</td><td><span class="pill ok">120,000 passed · 0 dropped</span></td></tr>
+      <tr><td>usage</td><td class="mono">dropped_calls &gt;= 0</td><td>warn</td><td><span class="pill ok">120,000 passed</span></td></tr>
+      <tr><td>care_calls</td><td class="mono">transcript IS NOT NULL AND length(transcript) &gt; 0</td><td>drop row</td><td><span class="pill ok">13,749 passed · 0 dropped</span></td></tr></table>
+      <div class="note">In production the landing files are replaced by <span class="feat">Lakeflow Connect</span> / Kafka feeds from billing, network probes and the contact-centre platform. Nothing downstream changes.</div></div>
+    <div class="card" style="margin-top:14px"><b style="color:var(--ink)">Pipeline source</b> <span class="mono" style="color:var(--mute)">notebooks/01_ingest_lakeflow.py</span>
+<pre class="code" style="margin-top:8px"><span class="k">@dlt.table</span>(comment=<span class="s">"Care calls with transcripts (transcript = sensitive)"</span>)
+<span class="k">@dlt.expect_or_drop</span>(<span class="s">"has_transcript"</span>, <span class="s">"transcript IS NOT NULL AND length(transcript) &gt; 0"</span>)
+<span class="k">def</span> <span class="f">care_calls</span>():
+    <span class="k">return</span> dlt.read(<span class="s">"bronze_care_calls"</span>).withColumn(<span class="s">"call_ts"</span>, F.to_timestamp(<span class="s">"call_ts"</span>))
+
+<span class="c"># bronze: Auto Loader, incremental</span>
+spark.readStream.format(<span class="s">"cloudFiles"</span>).option(<span class="s">"cloudFiles.format"</span>, <span class="s">"parquet"</span>) \
+     .load(<span class="s">"/Volumes/streamline_telco/raw/landing/care_calls/"</span>)</pre></div>
+  </div>
+  <div id="jt-log" style="display:none"><div class="console" id="console"></div>
+    <div class="note">Replay of the committed run output (<span class="mono">evidence/model_run_output.txt</span>).</div></div>
+</section>
+
+<!-- ================= CATALOG ================= -->
+<section class="page" id="p-catalog">
+  <div class="crumb">Catalog › streamline_telco › <b id="catcrumb">gold.save_list</b></div>
+  <h1 id="cattitle">save_list</h1>
+  <div class="sub"><span class="feat">Unity Catalog</span>: one governed namespace with medallion schemas, tags, a column mask on transcripts, least-privilege grants and automatic lineage.</div>
+  <div class="cat"><div class="tree" id="tree"></div><div>
+    <div class="tabs" id="cattabs"><button class="on" data-t="cols">Columns</button><button data-t="sample">Sample data</button><button data-t="lin">Lineage</button><button data-t="perm">Permissions</button></div>
+    <div id="catbody"></div></div></div>
+</section>
+
+<!-- ================= SQL / AI FUNCTIONS ================= -->
+<section class="page" id="p-sql">
+  <div class="crumb">SQL editor › <b>02_genai_enrichment</b></div>
+  <div style="display:flex;align-items:center;gap:12px"><h1>Read every care call with AI Functions</h1><button class="btn p" id="runsql" style="margin-left:auto">▶ Run</button></div>
+  <div class="sub"><span class="feat">AI Functions</span> call Databricks-hosted foundation models straight from SQL, governed by <span class="feat">Unity Catalog</span>. No model to host; transcripts never leave the platform. Only new calls are processed each night.</div>
+<pre class="code"><span class="k">INSERT INTO</span> streamline_telco.silver.care_calls_enriched
+<span class="k">SELECT</span> c.call_id, c.subscriber_id, c.transcript,
+  <span class="f">ai_analyze_sentiment</span>(c.transcript)                                                   <span class="k">AS</span> sentiment,
+  <span class="f">ai_classify</span>(c.transcript, <span class="k">ARRAY</span>(<span class="s">'network'</span>,<span class="s">'billing'</span>,<span class="s">'retention'</span>,<span class="s">'device'</span>,<span class="s">'general'</span>)) <span class="k">AS</span> intent,
+  <span class="k">COALESCE</span>(<span class="k">TRY_CAST</span>(<span class="f">ai_query</span>(<span class="s">'databricks-meta-llama-3-3-70b-instruct'</span>,
+     <span class="k">CONCAT</span>(<span class="s">'Does this care call show intent to leave, port the number or switch provider? Answer 1 or 0: '</span>, c.transcript))
+  <span class="k">AS INT</span>), 0)                                                                         <span class="k">AS</span> switch_intent
+<span class="k">FROM</span> streamline_telco.silver.care_calls c
+<span class="k">LEFT ANTI JOIN</span> streamline_telco.silver.care_calls_enriched e <span class="k">ON</span> c.call_id = e.call_id;</pre>
+  <div id="sqlstatus" class="note"></div>
+  <div class="card" style="margin-top:12px;padding:0;overflow:hidden"><div class="scroll" style="max-height:none"><table class="t" id="sqlres"></table></div></div>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:14px" id="sqlkpi"></div>
+</section>
+
+<!-- ================= MLFLOW ================= -->
+<section class="page" id="p-mlflow">
+  <div class="crumb">Experiments › save_desk_churn › <b>run save_desk_gbm</b></div>
+  <h1>Churn model: save_desk_gbm</h1>
+  <div class="sub">Tracked in <span class="feat">MLflow</span>, registered in <span class="feat">Unity Catalog</span> as <span class="mono">streamline_telco.gold.save_desk_churn</span>. Retrained weekly on logged outcomes.</div>
+  <div class="kp" id="mlkpi"></div>
+  <div class="grid" style="grid-template-columns:1.2fr 1fr;margin-top:14px">
+    <div class="card"><b style="color:var(--ink)">Top drivers (feature importance)</b><div class="note" style="margin:2px 0 10px">Lava = features extracted from care calls by AI Functions</div><div id="fi"></div></div>
+    <div class="card"><b style="color:var(--ink)">Does reading the calls matter? (ablation)</b><div class="note" style="margin:2px 0 10px">Same model, retrained without the Gen AI call features</div><div id="abl"></div>
+      <div style="margin-top:16px"><b style="color:var(--ink)">Registered model</b>
+      <table class="t" style="margin-top:6px"><tr><th>Version</th><th>Alias</th><th>Source run</th></tr><tr><td>1</td><td><span class="pill ok">@champion</span></td><td class="mono">save_desk_gbm</td></tr></table></div></div>
+  </div>
+</section>
+
+<!-- ================= LAKEBASE ================= -->
+<section class="page" id="p-lakebase">
+  <div class="crumb">Compute › Lakebase › <b>streamline-save-desk</b></div>
+  <div style="display:flex;align-items:center;gap:12px"><h1>streamline-save-desk</h1><span class="pill ok">● Available</span><span class="pill">CU_1 · Postgres</span></div>
+  <div class="sub"><span class="feat">Lakebase</span>: managed Postgres for the app's operational reads and writes. The scored save list arrives through a <span class="feat">synced table</span>; agent outcomes are written back transactionally.</div>
+  <div class="grid" style="grid-template-columns:1fr 1fr">
+    <div class="card"><b style="color:var(--ink)">Synced table</b>
+      <table class="t" style="margin-top:8px"><tr><td>Source (Unity Catalog)</td><td class="mono">streamline_telco.gold.save_list</td></tr>
+      <tr><td>Target (Postgres)</td><td class="mono">databricks_postgres.gold.save_list_synced</td></tr>
+      <tr><td>Primary key</td><td class="mono">subscriber_id</td></tr><tr><td>Policy</td><td>Triggered after nightly scoring</td></tr>
+      <tr><td>Rows</td><td>20,000</td></tr><tr><td>Status</td><td><span class="pill ok">Synced</span></td></tr></table></div>
+    <div class="card"><b style="color:var(--ink)">Query the app's table</b>
+<pre class="code" style="margin-top:8px"><span class="k">SELECT</span> churn_probability, next_best_offer
+<span class="k">FROM</span> gold.save_list_synced
+<span class="k">WHERE</span> subscriber_id = <span class="s">'STL102197'</span>;</pre>
+      <div style="margin-top:10px"><button class="btn p" id="pgq">▶ Run</button> <span id="pgres" class="mono" style="margin-left:8px"></span></div>
+      <div class="note">500 point lookups by key in the build run averaged 0.013 ms (local stand-in; managed Postgres adds network latency, still milliseconds).</div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><b style="color:var(--ink)">save_desk.save_actions</b>: outcomes written by the app <span class="pill run" id="pgcount">0 rows this session</span>
+    <table class="t" style="margin-top:8px" id="actions"><tr><th>action_id</th><th>subscriber_id</th><th>agent_id</th><th>offer</th><th>outcome</th><th>created_at</th></tr></table>
+    <div class="note">Log an outcome in the Save Desk app (Apps → save-desk) and it appears here. Outcomes flow back to the lakehouse and retrain the model.</div></div>
+</section>
+
+<!-- ================= GENIE ================= -->
+<section class="page" id="p-genie">
+  <div class="crumb">Genie › <b>Streamline Telco: Save Desk</b></div>
+  <h1>Streamline Telco: Save Desk</h1>
+  <div class="sub"><span class="feat">Genie</span> space over <span class="mono">gold.save_list</span>, <span class="mono">gold.subscriber_features</span>, <span class="mono">silver.care_calls_enriched</span>, with instructions and trusted SQL. Every answer shows its SQL.</div>
+  <div class="genie"><div><div class="note" style="margin:0 0 8px">Sample questions</div><div id="gchips"></div></div>
+    <div class="chat"><div class="msgs" id="msgs"><div class="mg"><div class="who">Genie</div>Hi! Ask me about at-risk subscribers, why they may leave, what to offer and how much revenue is at stake.</div></div>
+      <div class="ask"><input type="text" id="gq" placeholder="Ask a question…"><button class="btn l" id="gbtn">Ask</button></div></div></div>
+</section>
+
+<!-- ================= APP ================= -->
+<section class="page" id="p-app">
+  <div class="crumb">Apps › <b>save-desk</b> <span class="pill ok" style="margin-left:6px">● Running</span> <span class="pill">Streamlit · reads Lakebase · service principal auth</span></div>
+  <div class="frame">
+    <div class="urlbar"><span class="dots"><i></i><i></i><i></i></span><span class="u">🔒 https://save-desk-streamline.databricksapps.com</span></div>
+    <div class="apphd"><div class="lg">Streamline<span>Telco</span> · Save Desk</div>
+      <nav><button class="on">Save list</button></nav>
+      <div class="who">Retention team · scores refreshed 02:00 · Powered by Databricks</div></div>
+    <div class="appbody">
+      <div class="akpi">
+        <div><div class="l">At-risk subscribers (High + Critical)</div><div class="v" id="k1"></div><div class="s" id="k1s"></div></div>
+        <div><div class="l">Annual revenue at risk</div><div class="v" id="k2"></div><div class="s">12-month bill, High + Critical</div></div>
+        <div><div class="l">Precision of today's top 10%</div><div class="v" id="k3"></div><div class="s" id="k3s"></div></div>
+        <div><div class="l">Saves logged today</div><div class="v" id="k4">0</div><div class="s" id="k4s">written to Lakebase</div></div>
+      </div>
+      <div class="arow">
+        <div class="acard"><h3>Who to call today, ranked by value at risk</h3>
+          <div class="filters">
+            <select id="fRegion"><option value="">All regions</option></select>
+            <select id="fDriver"><option value="">All drivers</option><option>network</option><option>price</option><option>contract</option><option>service</option></select>
+            <select id="fBand"><option value="">High + Critical</option><option>Critical</option><option>High</option></select>
+            <label style="align-self:center;font-size:13px;color:var(--mute)"><input type="checkbox" id="fSwitch"> mentioned switching</label>
+          </div>
+          <div class="scroll"><table class="t"><thead><tr><th>Subscriber</th><th>Region</th><th>Plan</th><th>Risk</th><th>Prob.</th><th>Value at risk</th><th>Driver</th></tr></thead><tbody id="tb"></tbody></table></div>
+        </div>
+        <div class="acard" id="detail"></div>
+      </div>
+    </div>
+  </div>
+</section>
+</main></div>
+
+<div id="guide" class="min"><div class="gh"><b>Demo script</b><span class="simtag">G</span><button id="gmin">–</button></div><ol id="gsteps"></ol></div>
+
+<script>
+const S = window.SUMMARY, L = window.SAVE_LIST, X = window.SIM;
+document.getElementById("logo").src = X.logo_white;
+const $ = id => document.getElementById(id);
+const eur = n => "€" + Math.round(n).toLocaleString("en-US");
+const fmt = n => n.toLocaleString("en-US");
+const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ---------------- navigation ----------------
+function go(p){
+  document.querySelectorAll("nav.side a").forEach(a => a.classList.toggle("on", a.dataset.p === p));
+  document.querySelectorAll(".page").forEach(s => s.classList.toggle("on", s.id === "p-" + p));
+  document.querySelector("main").scrollTop = 0;
+}
+document.querySelectorAll("nav.side a").forEach(a => a.onclick = () => go(a.dataset.p));
+function tabs(groupId, prefix, onShow){
+  const g = $(groupId);
+  g.querySelectorAll("button").forEach(b => b.onclick = () => {
+    g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    if (prefix) g.parentElement.querySelectorAll(`[id^=${prefix}]`).forEach(el => el.style.display = el.id === prefix + b.dataset.t ? "" : "none");
+    if (onShow) onShow(b.dataset.t);
+  });
+}
+
+// ---------------- home ----------------
+const J = [
+  ["1","Raw data","Synthetic source","Billing, network, contracts, care-call transcripts","catalog"],
+  ["2","Ingest","Lakeflow","Declarative pipeline · Auto Loader · expectations","jobs"],
+  ["3","Govern","Unity Catalog","Medallion · tags · column mask · grants · lineage","catalog"],
+  ["4","Read the calls","AI Functions","Sentiment, intent, switching intent from SQL","sql"],
+  ["5","Predict","MLflow","Churn model, reasons, next best offer","mlflow"],
+  ["6","Serve & ask","Lakebase · Genie","Millisecond reads + write-back · plain-English Q&A","lakebase"],
+  ["7","Act","Databricks Apps","Save Desk for agents and managers","app"]];
+$("journey").innerHTML = J.map(j => `<div class="jstep" data-p="${j[4]}"><div class="n">STEP ${j[0]}</div><b>${j[1]}</b><div class="feat">${j[2]}</div><small>${j[3]}</small></div>`).join("");
+document.querySelectorAll(".jstep").forEach(e => e.onclick = () => go(e.dataset.p));
+const M = X.metrics;
+$("homekpi").innerHTML = [
+  [fmt(S.n_subs),"subscribers scored every night"],[fmt(X.pipeline.landing.care_calls),"care calls read by AI"],
+  [Math.round(M.precision_at_top_decile*100)+"%",`precision of the top-10% list (${M.lift_at_top_decile.toFixed(1)}× random)`],
+  ["€" + Math.round(S.hc_revenue/1e3) + "k","annual revenue at risk (High + Critical)"]].map(k => `<div class="card"><div class="v">${k[0]}</div><div class="l">${k[1]}</div></div>`).join("");
+
+// ---------------- jobs ----------------
+const P = X.pipeline.landing;
+const TASKS = [
+  {k:"ingest", n:"ingest", ty:"Lakeflow pipeline", f:"Lakeflow Declarative Pipelines",
+   d:`Auto Loader reads 5 landing folders from the UC Volume into bronze, then expectations conform them into silver: ${fmt(P.subscribers)} subscribers, ${fmt(P.contracts)} contracts, ${fmt(P.usage)} usage rows (${X.pipeline.usage_months} months), ${fmt(P.care_calls)} care calls.`},
+  {k:"genai", n:"genai_enrichment", ty:"SQL · serverless warehouse", f:"AI Functions",
+   d:`ai_analyze_sentiment, ai_classify and ai_query read ${fmt(P.care_calls)} calls: ${fmt(X.pipeline.sentiment_mix.negative)} negative, ${fmt(X.pipeline.switch_calls)} with switching intent. Only new calls are processed.`, go:"sql"},
+  {k:"gov", n:"governance", ty:"SQL · serverless warehouse", f:"Unity Catalog",
+   d:"Tags transcripts as sensitive, applies a column mask (only streamline-data-team sees raw text) and grants retention read access to gold only.", go:"catalog"},
+  {k:"ml", n:"churn_model", ty:"Notebook · serverless", f:"MLflow + Unity Catalog models",
+   d:`Builds 21 features, trains and logs the model (ROC-AUC ${M.roc_auc.toFixed(3)}), scores ${fmt(S.n_subs)} subscribers and merges gold.save_list with reasons, offer and an ai_query talk track.`, go:"mlflow"},
+  {k:"lb", n:"lakebase_sync", ty:"Notebook · serverless", f:"Lakebase synced table",
+   d:"Triggers the synced-table refresh gold.save_list → Postgres and makes sure save_desk.save_actions exists with grants for the app's service principal.", go:"lakebase"}];
+function drawDag(state){
+  $("dag").innerHTML = TASKS.map((t,i) => (i ? '<div class="edge"></div>' : '') +
+    `<div class="task ${state[i]||''}" data-i="${i}"><div class="tt">${t.n}</div><div class="ty">${t.ty}</div>
+      <span class="pill ${state[i]==='ok'?'ok':state[i]==='run'?'run':'wait'}">${state[i]==='ok'?'✓ Succeeded':state[i]==='run'?'Running…':'Pending'}</span>
+      <div class="bar"><i style="width:${state[i]==='ok'?100:state[i]==='run'?55:0}%"></i></div></div>`).join("");
+  document.querySelectorAll(".task").forEach(e => e.onclick = () => {
+    const t = TASKS[e.dataset.i];
+    $("taskinfo").innerHTML = `<b style="color:var(--ink)">${t.n}</b> · <span class="feat">${t.f}</span><p style="margin:8px 0 0;line-height:1.5">${t.d}</p>` +
+      (t.go ? `<button class="btn" style="margin-top:10px" onclick="go('${t.go}')">Open ${t.f} →</button>` : `<button class="btn" style="margin-top:10px" onclick="document.querySelector('#jobtabs [data-t=pipe]').click()">Open pipeline graph →</button>`);
+  });
+}
+drawDag(["ok","ok","ok","ok","ok"]);
+tabs("jobtabs", "jt-");
+const logLines = X.runlog.split("\n");
+$("console").textContent = X.runlog;
+$("runjob").onclick = async () => {
+  $("runjob").disabled = true; $("jobstate").className = "pill run"; $("jobstate").textContent = "Running · manual trigger";
+  const st = TASKS.map(() => ""); drawDag(st); $("console").textContent = "";
+  const chunks = [[0,11],[11,17],[17,17],[17,45],[45,logLines.length]];
+  for (let i = 0; i < TASKS.length; i++){
+    st[i] = "run"; drawDag(st);
+    for (const ln of logLines.slice(...chunks[i])) { $("console").textContent += ln + "\n"; $("console").scrollTop = 1e9; await sleep(40); }
+    await sleep(700); st[i] = "ok"; drawDag(st);
+  }
+  $("jobstate").className = "pill ok"; $("jobstate").textContent = "✓ Succeeded · just now"; $("runjob").disabled = false;
+};
+$("pipeg").innerHTML = (() => {
+  const raw = ["subscribers","contracts","usage","care_calls","churn_labels"];
+  const col = (title, items) => `<div><div class="note" style="margin:0 0 4px;font-weight:700">${title}</div>${items.join("")}</div>`;
+  return col("UC Volume · raw/landing", raw.map(n => `<div class="tbl"><b>${n}/</b> <span class="r">parquet</span></div>`)) +
+    `<div class="arrowc">→<br><small class="note">Auto Loader</small></div>` +
+    col("Bronze (streaming tables)", raw.map(n => `<div class="tbl"><b>bronze_${n}</b><span class="r">${fmt(P[n])}</span></div>`)) +
+    `<div class="arrowc">→<br><small class="note">expectations</small></div>` +
+    col("Silver (materialized)", raw.map(n => `<div class="tbl"><b>${n}</b><span class="r">${fmt(P[n])} <span class="pill ok">✓</span></span></div>`));
+})();
+
+// ---------------- catalog ----------------
+const CAT = X.catalog; let curT = CAT.find(t => t.name === "save_list"), curTab = "cols";
+function tree(){
+  const by = s => CAT.filter(t => t.schema === s);
+  let h = `<div class="hd">▾ streamline_telco</div>`;
+  for (const s of ["raw","silver","gold"]) {
+    h += `<div class="l1 hd">▾ ${s}</div>`;
+    if (s === "raw") h += `<div class="l2" style="color:var(--mute)">▤ landing (volume)</div>`;
+    h += by(s).map(t => `<div class="l2 ${t===curT?'on':''}" data-n="${t.schema}.${t.name}">⊞ ${t.name}</div>`).join("");
+  }
+  $("tree").innerHTML = h;
+  $("tree").querySelectorAll("[data-n]").forEach(e => e.onclick = () => { curT = CAT.find(t => `${t.schema}.${t.name}` === e.dataset.n); showT(); });
+}
+const LIN = {subscribers:["raw.landing/subscribers","silver.subscribers","gold.subscriber_features","gold.save_list"],
+  contracts:["raw.landing/contracts","silver.contracts","gold.subscriber_features","gold.save_list"],
+  usage:["raw.landing/usage","silver.usage","gold.subscriber_features","gold.save_list"],
+  care_calls:["raw.landing/care_calls","silver.care_calls","silver.care_calls_enriched","gold.subscriber_features","gold.save_list"],
+  churn_labels:["raw.landing/churn_labels","silver.churn_labels","gold.subscriber_features","MLflow model"],
+  care_calls_enriched:["silver.care_calls","silver.care_calls_enriched","gold.subscriber_features","gold.save_list"],
+  subscriber_features:["silver.* (4 tables)","silver.care_calls_enriched","gold.subscriber_features","MLflow model","gold.save_list"],
+  save_list:["gold.subscriber_features","MLflow model","gold.save_list","Lakebase: save_list_synced","App: save-desk","Genie space"]};
+function showT(){
+  tree(); $("cattitle").textContent = curT.name; $("catcrumb").textContent = `${curT.schema}.${curT.name}`;
+  const sens = c => (curT.name.startsWith("care_calls") && c === "transcript");
+  let h = "";
+  if (curTab === "cols") h = `<div class="note" style="margin:0 0 8px">${fmt(curT.rows)} rows · Delta · managed</div><div class="card" style="padding:0;overflow:hidden"><table class="t"><tr><th>Column</th><th>Type</th><th>Tags</th></tr>` +
+     curT.columns.map(([c,t]) => `<tr><td class="mono">${c}</td><td class="mono" style="color:var(--mute)">${t.replace("object","string")}</td><td>${sens(c)?'<span class="pill tag">classification: sensitive</span> <span class="pill warn">column mask</span>':''}</td></tr>`).join("") + `</table></div>`;
+  if (curTab === "sample") h = `<div class="card" style="padding:0;overflow:auto"><table class="t"><tr>${curT.columns.map(c=>`<th>${c[0]}</th>`).join("")}</tr>` +
+     curT.sample.map(r => `<tr>${r.map((v,i) => `<td>${sens(curT.columns[i][0]) ? '<span class="mono" style="color:var(--mute)">[REDACTED]</span>' : esc(String(v).slice(0,60))}</td>`).join("")}</tr>`).join("") + `</table></div>` +
+     (curT.name.startsWith("care_calls") ? `<div class="note">You are viewing as a retention user: the Unity Catalog column mask redacts transcripts. Members of streamline-data-team see the text.</div>` : "");
+  if (curTab === "lin") { const ch = LIN[curT.name] || [];
+     h = `<div class="card"><b style="color:var(--ink)">Lineage</b>, captured automatically by Unity Catalog<div class="lineage" style="margin-top:12px">` +
+     ch.map(n => `<div class="lnode ${n.endsWith(curT.name)?'me':''}">${n}</div>`).join('<span style="color:var(--lava);font-weight:700">→</span>') + `</div></div>`; }
+  if (curTab === "perm") h = `<div class="card" style="padding:0;overflow:hidden"><table class="t"><tr><th>Principal</th><th>Privileges</th><th>Inherited from</th></tr>` +
+     (curT.schema === "gold" ? `<tr><td>streamline-retention</td><td>USE SCHEMA, SELECT</td><td>schema gold</td></tr><tr><td>save-desk app (service principal)</td><td>SELECT (via Lakebase synced table)</td><td>app resource</td></tr>` : `<tr><td>streamline-retention</td><td style="color:var(--mute)">no access</td><td>—</td></tr>`) +
+     `<tr><td>streamline-data-team</td><td>USE SCHEMA, SELECT${curT.schema!=="gold"?", sees unmasked transcripts":""}</td><td>schema ${curT.schema}</td></tr></table></div>`;
+  $("catbody").innerHTML = h;
+}
+tabs("cattabs", null, t => { curTab = t; showT(); }); showT();
+
+// ---------------- SQL / AI functions ----------------
+const C = X.calls;
+$("sqlres").innerHTML = `<tr><th>call_id</th><th>transcript</th><th>sentiment</th><th>intent</th><th>switch_intent</th></tr>`;
+$("sqlstatus").textContent = "Press ▶ Run to enrich the latest care calls.";
+$("runsql").onclick = async () => {
+  $("runsql").disabled = true; $("sqlstatus").innerHTML = '<span class="pill run">Running on serverless SQL warehouse…</span>';
+  $("sqlres").innerHTML = `<tr><th>call_id</th><th>transcript</th><th>sentiment</th><th>intent</th><th>switch_intent</th></tr>`;
+  await sleep(900);
+  for (const c of C) {
+    $("sqlres").insertAdjacentHTML("beforeend", `<tr><td class="mono">${c.call_id}</td><td style="max-width:560px">${esc(c.transcript)}</td>
+      <td><span class="sent ${c.sentiment}">${c.sentiment}</span></td><td><span class="pill">${c.intent}</span></td>
+      <td>${c.switch_intent ? '<span class="pill tag">1 · switching</span>' : '<span style="color:var(--mute)">0</span>'}</td></tr>`);
+    await sleep(160);
+  }
+  $("sqlstatus").innerHTML = `<span class="pill ok">✓ ${fmt(P.care_calls)} rows inserted</span> · showing 14 examples`;
+  $("sqlkpi").innerHTML = [[fmt(X.pipeline.sentiment_mix.negative), "negative calls"], [fmt(X.pipeline.switch_calls), "calls with switching intent"],
+    [Math.round(M.genai_intent_agreement*1000)/10 + "%", "intent agrees with the IVR queue"]].map(k => `<div class="card"><div style="font-size:24px;font-weight:700;color:var(--ink)">${k[0]}</div><div class="note" style="margin:0">${k[1]}</div></div>`).join("");
+  $("runsql").disabled = false;
+};
+
+// ---------------- MLflow ----------------
+$("mlkpi").innerHTML = [[M.roc_auc.toFixed(3),"ROC-AUC (hold-out, n="+fmt(M.test_n)+")"],[M.pr_auc.toFixed(3),"PR-AUC"],
+  [Math.round(M.precision_at_top_decile*100)+"%","precision, top 10%"],[M.lift_at_top_decile.toFixed(2)+"×","lift over the "+(M.base_churn_rate_60d*100).toFixed(1)+"% base rate"]]
+  .map(k => `<div class="card"><div class="v">${k[0]}</div><div class="l">${k[1]}</div></div>`).join("");
+const VOICE = ["switch_intent","n_retention_calls","avg_sentiment","n_negative_calls","n_calls_60d","n_network_calls","n_billing_calls"];
+const mx = M.top_features[0].importance;
+$("fi").innerHTML = M.top_features.slice(0,8).map(f => `<div class="fi"><span class="mono">${f.feature}</span><div class="b ${VOICE.includes(f.feature)?'':'g'}" style="width:${f.importance/mx*100}%"></div><span>${f.importance.toFixed(3)}</span></div>`).join("");
+const A = M.ablation_without_genai;
+const ab = (l, a, b, d) => `<div style="margin:10px 0"><div class="note" style="margin:0 0 4px">${l}</div>
+  <div class="fi" style="grid-template-columns:130px 1fr 50px"><span>without Gen AI</span><div class="b g" style="width:${a/b*100}%"></div><span>${a.toFixed(d)}</span></div>
+  <div class="fi" style="grid-template-columns:130px 1fr 50px"><span><b>with Gen AI</b></span><div class="b" style="width:100%"></div><span><b>${b.toFixed(d)}</b></span></div></div>`;
+$("abl").innerHTML = ab("ROC-AUC", A.roc_auc, M.roc_auc, 3) + ab("Precision of the top-10% call list", A.precision_at_top_decile, M.precision_at_top_decile, 3);
+
+// ---------------- Lakebase ----------------
+const ACTIONS = [];
+function drawActions(){
+  $("pgcount").textContent = `${ACTIONS.length} row${ACTIONS.length===1?'':'s'} this session`;
+  $("actions").innerHTML = `<tr><th>action_id</th><th>subscriber_id</th><th>agent_id</th><th>offer</th><th>outcome</th><th>created_at</th></tr>` +
+    (ACTIONS.length ? ACTIONS.map(a => `<tr><td>${a.id}</td><td class="mono">${a.sub}</td><td>AG017</td><td>${a.offer}</td><td><span class="pill ${a.o==='accepted'?'ok':''}">${a.o}</span></td><td class="mono">${a.ts}</td></tr>`).join("")
+      : `<tr><td colspan="6" style="color:var(--mute)">No outcomes logged yet in this session.</td></tr>`);
+}
+drawActions();
+$("pgq").onclick = async () => { $("pgres").textContent = "…"; await sleep(250); const r = L.find(x => x.subscriber_id === "STL102197");
+  $("pgres").textContent = `${r.churn_probability} | ${r.next_best_offer}  (1 row, 4 ms)`; };
+
+// ---------------- Genie ----------------
+const G = [
+  {q:"How many subscribers are High or Critical risk, and how much annual revenue do they represent?", kw:["how many","revenue","high","critical"],
+   sql:"SELECT risk_band, COUNT(*) AS subscribers, SUM(annual_value_eur) AS annual_revenue_eur\nFROM streamline_telco.gold.save_list\nWHERE risk_band IN ('High','Critical')\nGROUP BY risk_band",
+   a:"1,825 subscribers are High or Critical risk, representing about €838k of annual revenue in this 20,000-subscriber sample.",
+   t:"risk_band  subscribers  annual_revenue_eur\nCritical           799             362,126\nHigh             1,026             475,678"},
+  {q:"Which region has the most at-risk subscribers because of network problems?", kw:["region","network"],
+   sql:"SELECT region, COUNT(*) AS at_risk_network\nFROM streamline_telco.gold.save_list\nWHERE risk_band IN ('High','Critical') AND driver = 'network'\nGROUP BY region ORDER BY at_risk_network DESC",
+   a:"The South: 183 at-risk subscribers whose main driver is network quality, ahead of the North (148). A list for the network team, not only for retention.",
+   t:"region   at_risk_network\nSouth                183\nNorth                148\nCapital              112\nCentral              105\nIslands               93\nCoast                 42"},
+  {q:"Show the 10 subscribers with the highest value at risk and what we should offer them", kw:["top","10","highest","offer"],
+   sql:"SELECT subscriber_id, plan, churn_probability, value_at_risk_eur, next_best_offer\nFROM streamline_telco.gold.save_list\nORDER BY value_at_risk_eur DESC LIMIT 10",
+   a:"The top 10 are mostly Fibre + Mobile households. Half need a loyalty price match after a bill increase; three need a network fix.",
+   t:L.slice(0,10).map(r=>`${r.subscriber_id}  ${r.plan.padEnd(16)} ${r.churn_probability.toFixed(2)}  ${eur(r.value_at_risk_eur).padStart(7)}  ${r.next_best_offer}`).join("\n")},
+  {q:"What is the churn rate for customers who mentioned switching on a care call vs. those who did not?", kw:["switch","mention","care call"],
+   sql:"SELECT switch_intent, ROUND(AVG(churned_next_60d)*100,1) AS churn_rate_pct\nFROM streamline_telco.gold.subscriber_features\nGROUP BY switch_intent",
+   a:"Customers who mentioned switching on a care call churned at 45.2%, versus 10.4% for everyone else: 4.3 times higher.",
+   t:"switch_intent  churn_rate_pct\n0                        10.4\n1                        45.2"},
+  {q:"Churn rate by plan, highest first", kw:["plan"],
+   sql:"SELECT plan, ROUND(AVG(churned_next_60d)*100,1) AS churn_rate_pct\nFROM streamline_telco.gold.subscriber_features\nGROUP BY plan ORDER BY churn_rate_pct DESC",
+   a:"Churn is similar across plans (14.0% to 15.8%). The plan is not the driver; network experience and what customers say on care calls are.",
+   t:"plan              churn_rate_pct\nMobile 50GB                 15.8\nFibre + Mobile              15.2\nFibre 1Gb                   15.2\nMobile Unlimited            14.9\nMobile 10GB                 14.0"}];
+$("gchips").innerHTML = G.map((g,i) => `<button class="chip" data-i="${i}">${g.q}</button>`).join("");
+$("gchips").querySelectorAll(".chip").forEach(c => c.onclick = () => { $("gq").value = G[c.dataset.i].q; ask(); });
+async function ask(){
+  const q = $("gq").value.trim(); if (!q) return; $("gq").value = "";
+  const s = q.toLowerCase(); const best = G.map(g => [g, g.kw.filter(w => s.includes(w)).length]).sort((a,b) => b[1]-a[1])[0];
+  $("msgs").insertAdjacentHTML("beforeend", `<div class="mu">${esc(q)}</div>`);
+  const id = "m" + Date.now(); $("msgs").insertAdjacentHTML("beforeend", `<div class="mg" id="${id}"><div class="who">Genie</div><span class="typing">Reading the save list tables</span></div>`);
+  $("msgs").scrollTop = 1e9; await sleep(1100);
+  const g = best[1] ? best[0] : null;
+  $(id).innerHTML = g ? `<div class="who">Genie</div>${g.a}<details open><summary>Show generated SQL</summary><pre class="code">${g.sql}</pre></details><pre class="code" style="background:#F7F6F3;color:var(--ink);margin-top:8px">${g.t}</pre>`
+    : `<div class="who">Genie</div>In this demo workspace, try one of the sample questions on the left.`;
+  $("msgs").scrollTop = 1e9;
+}
+$("gbtn").onclick = ask; $("gq").onkeydown = e => { if (e.key === "Enter") ask(); };
+
+// ---------------- App (Save Desk) ----------------
+$("k1").textContent = fmt(S.hc_subs); $("k1s").textContent = `of ${fmt(S.n_subs)} postpaid subscribers`;
+$("k2").textContent = "€" + Math.round(S.hc_revenue/1e3) + "k";
+$("k3").textContent = Math.round(S.top_prec*100) + "%"; $("k3s").textContent = `${S.lift}× better than random calling`;
+[...new Set(L.map(r => r.region))].sort().forEach(r => $("fRegion").insertAdjacentHTML("beforeend", `<option>${r}</option>`));
+let sel = null, saves = 0, kept = 0;
+function rows(){ return L.filter(r => ["High","Critical"].includes(r.risk_band) && (!fRegion.value || r.region === fRegion.value)
+  && (!fDriver.value || r.driver === fDriver.value) && (!fBand.value || r.risk_band === fBand.value) && (!fSwitch.checked || r.switch_intent === 1)); }
+function render(){
+  const v = rows();
+  $("tb").innerHTML = v.map(r => `<tr data-id="${r.subscriber_id}" class="${sel===r.subscriber_id?'sel':''}"><td><b>${r.subscriber_id}</b></td><td>${r.region}</td><td>${r.plan}</td>
+    <td><span class="band ${r.risk_band}">${r.risk_band}</span></td><td>${Math.round(r.churn_probability*100)}%</td><td>${eur(r.value_at_risk_eur)}</td><td><span class="drv">${r.driver}</span></td></tr>`).join("");
+  $("tb").querySelectorAll("tr").forEach(t => t.onclick = () => { sel = t.dataset.id; render(); show(sel); });
+  if ((!sel || !v.find(r => r.subscriber_id === sel)) && v.length) { sel = v[0].subscriber_id; render(); show(sel); }
+}
+function show(id){
+  const r = L.find(x => x.subscriber_id === id);
+  $("detail").innerHTML = `<div style="font-size:12px;color:var(--mute)">${r.subscriber_id} · ${r.segment} · ${r.lines} line(s) · ${r.tenure_months} months with us</div>
+    <h3 style="margin:4px 0 8px">${r.plan} · ${r.region}</h3>
+    <div style="display:flex;gap:24px;align-items:flex-end;margin-bottom:8px">
+      <div><div style="font-size:12px;color:var(--mute)">Churn probability, next 60 days</div><div class="big">${Math.round(r.churn_probability*100)}%</div></div>
+      <div><div style="font-size:12px;color:var(--mute)">Value at risk</div><div class="big">${eur(r.value_at_risk_eur)}</div></div>
+      <div><div style="font-size:12px;color:var(--mute)">Annual value</div><div class="big" style="color:var(--mute)">${eur(r.annual_value_eur)}</div></div></div>
+    <div class="pbar"><i style="width:${r.churn_probability*100}%"></i></div>
+    <h3 style="margin:14px 0 6px">Why they may leave</h3>${r.top_reasons.split("; ").map(x => `<div class="reason">${esc(x)}</div>`).join("")}
+    <div class="offer"><b>Next best offer:</b> ${r.next_best_offer} <span style="color:var(--mute)">(cost ≈ ${eur(r.offer_cost_eur)})</span><br><br><b>Suggested opening:</b> ${esc(r.talk_track)}</div>
+    <div style="font-size:12px;color:var(--mute);margin-bottom:6px">Log the outcome</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" style="background:var(--teal);color:#fff;border-color:var(--teal)" data-o="accepted">Offer accepted</button>
+      <button class="btn" data-o="declined">Declined</button><button class="btn" data-o="callback">Call back</button><button class="btn" data-o="no_answer">No answer</button></div>
+    <div class="toast" id="toast"></div>`;
+  $("detail").querySelectorAll("[data-o]").forEach(b => b.onclick = () => {
+    const ts = new Date().toLocaleTimeString();
+    ACTIONS.unshift({id: 1001 + ACTIONS.length, sub: r.subscriber_id, offer: r.next_best_offer, o: b.dataset.o, ts}); drawActions();
+    if (b.dataset.o === "accepted") { saves++; kept += r.annual_value_eur; $("k4").textContent = saves; $("k4s").textContent = `${eur(kept)} annual revenue kept`; }
+    $("toast").innerHTML = `✓ ${b.dataset.o} → Lakebase <span class="mono">save_desk.save_actions</span> (${ts}) · <a href="#" onclick="go('lakebase');return false">view in Lakebase</a>`;
+  });
+}
+[fRegion, fDriver, fBand, fSwitch].forEach(e => e.onchange = () => { sel = null; render(); });
+render();
+
+// ---------------- presenter guide ----------------
+const STEPS = [["Solution overview: frame the journey (tell)","home"],["Jobs & Pipelines: ▶ Run now, show ingestion","jobs"],
+  ["Pipeline graph: Auto Loader + expectations","jobs:pipe"],["AI Functions: ▶ Run, read the calls","sql"],["Catalog: transcript masked, lineage","catalog"],
+  ["MLflow: drivers + Gen AI ablation","mlflow"],["Apps › save-desk: open STL102197, log 'accepted'","app"],["Filter: driver = network, region = South","app"],
+  ["Lakebase: the outcome row just written","lakebase"],["Genie: the switching question (45% vs 10%)","genie"],["Back to overview: land the value (tell)","home"]];
+$("gsteps").innerHTML = STEPS.map((s,i) => `<li data-i="${i}">${s[0]}</li>`).join("");
+$("gsteps").querySelectorAll("li").forEach(li => li.onclick = () => { const [p,t] = STEPS[li.dataset.i][1].split(":"); go(p);
+  if (t) document.querySelector(`#jobtabs [data-t=${t}]`).click(); li.classList.add("done"); });
+$("gmin").onclick = () => $("guide").classList.toggle("min");
+document.addEventListener("keydown", e => { if (e.key.toLowerCase() === "g" && document.activeElement.tagName !== "INPUT") $("guide").style.display = $("guide").style.display === "none" ? "" : "none"; });
+</script>
+</body>
+</html>

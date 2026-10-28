@@ -9,16 +9,26 @@
 
 The FE Bar picks the persona names for the industry; adapt to whoever introduces themselves.
 
-## Run of show (open the PDF deck and app/demo.html)
+## Demo tool: `app/simulator.html` (open in Chrome, full screen)
+A Databricks workspace simulator. The Save Desk runs as a Databricks App, next to the pages that show how it is built:
+Solution overview · Jobs & Pipelines (▶ Run now replays the nightly job; pipeline graph with Auto Loader and expectations) ·
+Catalog (transcript masked, lineage, permissions) · AI Functions (▶ Run reads the calls) · Experiments & Models (drivers, Gen AI ablation) ·
+Lakebase (synced table; outcomes logged in the app appear live) · Genie (chat with SQL) · Apps › save-desk.
+Bottom-left **Demo script** panel: click a step to jump there (– collapses it, G hides it). Every number comes from the committed run output.
+If asked: "This is a demo workspace replaying last night's run on synthetic data; the code in the repo deploys the same thing to a real workspace."
+
+## Run of show (open the PDF deck and app/simulator.html)
 1. **Set-up (1 min), slide 1:** who we are, who they are, the agenda, "interrupt me".
 2. **Outcome first (2 min), slide 2:** −1 pt churn, 20,000 kept, €6.5M (€5.0M net), 6-week POC at ≈$1.6k.
 3. **Problem (2 min), slide 3:** churn is seen only at porting; the signals sit in 3 systems. *Ask the CCO how they find at-risk customers today.*
 4. **What we found (2 min), slide 4:** 45% vs 10%, 3.7× lift, Gen AI measured at +0.053 AUC.
-5. **Demo, tell-show-tell (6 min), slide 5 then the app:**
+5. **Demo, tell-show-tell (6–8 min), slide 5 then the simulator:**
+   - Show (how it works, 2 min): Jobs & Pipelines ▶ Run now → pipeline graph → AI Functions ▶ Run → Catalog: transcript `[REDACTED]`.
    - Tell: "Three things to watch: who to call, why, what to offer."
    - Show: Save list → STL102197 (89%, €2,377 at risk, bill up 50%, mentioned switching) → loyalty price match → read the opening line → **Offer accepted** (Lakebase write-back, counter moves).
    - Show: filters driver = network, region = South: "a discount won't fix a dropped call; this list goes to the network team."
-   - Show: Ask Genie → the switching question → 45.2% vs 10.4% with the SQL.
+   - Show: Lakebase → the outcome row you just logged.
+   - Show: Genie → the switching question → 45.2% vs 10.4% with the SQL.
    - Tell: "From reacting to a porting request to calling while there is still time. 20,000 saves = €6.5M."
 6. **Architecture and security (3 min), slides 6–7:** technical altitude, then one business sentence.
 7. **Value, cost, plan (4 min), slides 10–12.**

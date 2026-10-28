@@ -5,3 +5,4 @@ __pycache__/
 /requirements.txt
 data/output/*.sqlite
 CleanShot*.png
+*.gslides

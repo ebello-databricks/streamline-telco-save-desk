@@ -3,71 +3,72 @@
 # MAGIC # 01 · Lakeflow — ingest the raw data
 # MAGIC **FE Bar stage: Lakeflow (ingest the raw data).**
 # MAGIC
-# MAGIC A **Lakeflow Declarative Pipeline** (formerly Delta Live Tables) that ingests the
-# MAGIC synthetic landing files from the Unity Catalog Volume into **bronze** (`raw.*`),
-# MAGIC then conforms and quality-checks them into **silver** (`silver.*`).
+# MAGIC A **Lakeflow Declarative Pipeline** that ingests the synthetic landing files from the UC
+# MAGIC Volume into **bronze** with Auto Loader (incremental — new daily drops are picked up
+# MAGIC automatically), then conforms and quality-checks them into **silver** with expectations.
 # MAGIC
-# MAGIC Attach this notebook to a Lakeflow pipeline with target catalog `plenitude_febar`.
-# MAGIC Bronze uses **Auto Loader** so new dropped files are picked up incrementally.
+# MAGIC Target catalog `streamline_telco`, schema `silver` (see `databricks.yml`).
+# MAGIC In production the same bronze tables are fed by Lakeflow Connect / Kafka from the
+# MAGIC billing system, the network probe feed and the contact-centre platform.
 
 # COMMAND ----------
 
 import dlt
 from pyspark.sql import functions as F
 
-VOLUME = "/Volumes/plenitude_febar/raw/landing"
+VOLUME = "/Volumes/streamline_telco/raw/landing"
 
-# ---------------------------------------------------------------- BRONZE
+
 def _bronze(name):
     @dlt.table(name=f"bronze_{name}", comment=f"Raw {name} (Auto Loader, synthetic)")
     def _t():
         return (spark.readStream.format("cloudFiles")
                 .option("cloudFiles.format", "parquet")
                 .option("cloudFiles.inferColumnTypes", "true")
-                .load(f"{VOLUME}/{name}.parquet")
+                .load(f"{VOLUME}/{name}/")
                 .withColumn("_ingested_at", F.current_timestamp()))
     return _t
 
-for _n in ["customers", "consumption", "contracts", "calls", "churn_labels"]:
+
+for _n in ["subscribers", "contracts", "usage", "care_calls", "churn_labels"]:
     _bronze(_n)
 
-# ---------------------------------------------------------------- SILVER
-@dlt.table(comment="Conformed customers")
-@dlt.expect_or_drop("valid_id", "customer_id IS NOT NULL")
-@dlt.expect("plausible_bill", "monthly_bill_eur BETWEEN 5 AND 5000")
-def silver_customers():
-    return (dlt.read("bronze_customers")
-            .withColumn("contract_end_date", F.to_date("contract_end_date"))
-            .dropDuplicates(["customer_id"]))
+# COMMAND ----------
 
-@dlt.table(comment="Conformed monthly consumption")
-@dlt.expect_or_drop("valid", "customer_id IS NOT NULL AND bill_amount_eur >= 0")
-def silver_consumption():
-    return (dlt.read("bronze_consumption")
-            .withColumn("month", F.to_date("month")))
+@dlt.table(comment="Conformed postpaid subscribers")
+@dlt.expect_or_drop("valid_id", "subscriber_id IS NOT NULL")
+def subscribers():
+    return dlt.read("bronze_subscribers").dropDuplicates(["subscriber_id"])
 
-@dlt.table(comment="Active contracts")
-def silver_contracts():
+
+@dlt.table(comment="Active contracts / commitments")
+@dlt.expect_or_drop("positive_price", "monthly_price_eur > 0")
+def contracts():
     return (dlt.read("bronze_contracts")
             .withColumn("start_date", F.to_date("start_date"))
-            .withColumn("end_date", F.to_date("end_date")))
+            .withColumn("commitment_end_date", F.to_date("commitment_end_date")))
 
-@dlt.table(comment="Contact-centre calls with transcripts (transcript = sensitive)")
+
+@dlt.table(comment="Monthly usage + network experience")
+@dlt.expect_or_drop("plausible_bill", "bill_amount_eur > 0 AND bill_amount_eur < 1000")
+@dlt.expect("non_negative_drops", "dropped_calls >= 0")
+def usage():
+    return dlt.read("bronze_usage").withColumn("month", F.to_date("month"))
+
+
+@dlt.table(comment="Care calls with transcripts (transcript = sensitive)")
 @dlt.expect_or_drop("has_transcript", "transcript IS NOT NULL AND length(transcript) > 0")
-def silver_calls():
-    return (dlt.read("bronze_calls")
-            .withColumn("call_ts", F.to_timestamp("call_ts"))
-            .withColumn("call_date", F.to_date("call_ts")))
+def care_calls():
+    return dlt.read("bronze_care_calls").withColumn("call_ts", F.to_timestamp("call_ts"))
 
-@dlt.table(comment="Ground-truth churn labels (90d)")
-def silver_churn_labels():
-    return dlt.read("bronze_churn_labels").select("customer_id", "churned_next_90d")
+
+@dlt.table(comment="Ground-truth churn labels (port-out within 60 days)")
+def churn_labels():
+    return dlt.read("bronze_churn_labels").select("subscriber_id", "churned_next_60d")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC **Data quality is enforced in the pipeline** (`@dlt.expect*`), so bad rows are
-# MAGIC dropped/flagged and surfaced in the pipeline's data-quality dashboard — evidence
-# MAGIC the ingestion actually ran and enforced contracts.
-# MAGIC
-# MAGIC Next: **`02_genai_enrichment`** turns `silver_calls.transcript` into churn signal.
+# MAGIC Expectations drop or flag bad rows and surface them in the pipeline's data-quality view.
+# MAGIC Local mirror of these rules + row counts: `evidence/model_run_output.txt` step `[1 silver]`.
+# MAGIC Next: **`02_genai_enrichment`**.

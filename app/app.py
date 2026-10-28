@@ -1,16 +1,21 @@
 """
-Plenitude — Voice-to-Retention | Retention Cockpit (Databricks App)
-===================================================================
+Streamline Telco — Save Desk (Databricks App)
+==============================================
 FE Bar stage: A Databricks App (surface it to the business).
 
-A Streamlit cockpit for the retention team. It reads the ranked churn call
-list from the GOLD layer (served via Lakebase in production; falls back to the
-committed parquet locally so the app runs anywhere), lets an agent filter by
-region / risk band / "mentioned switching", shows each customer's top churn
-reasons, and logs a retention action back to Lakebase.
+Streamlit cockpit for retention agents and their manager:
+  * KPI strip: at-risk subscribers, revenue at risk, saves logged today
+  * Save list ranked by value at risk, filterable by region / driver / band
+  * Subscriber card: why they may leave, next-best-offer, talk track
+  * Log outcome -> written back to Lakebase `save_actions`
 
-Deploy: `databricks apps deploy plenitude-retention --source-code-path ./app`
-Run locally: `streamlit run app/app.py`
+Data source, in order of preference:
+  1. Lakebase (app resource `lakebase` injects PGHOST/PGUSER...)   — production
+  2. committed parquet data/output/gold_save_list.parquet           — local dev
+The click-through demo used in the role-play is the static twin: app/demo.html.
+
+Deploy: databricks bundle deploy   (or: databricks apps deploy save-desk --source-code-path ./app)
+Local:  streamlit run app/app.py
 """
 from __future__ import annotations
 import os
@@ -18,123 +23,67 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="Plenitude · Voice-to-Retention", page_icon="⚡", layout="wide")
-
-BAND_COLOR = {"Critical": "#E5391D", "High": "#A9640A", "Medium": "#3C5A63", "Low": "#00875A"}
-MARGIN = 0.22  # gross-margin assumption for value-at-risk
-
-# Data source, in order of preference:
-#   1. Lakebase (PGHOST set)         — operational serving, Tier 2
-#   2. Unity Catalog via SQL warehouse (DATABRICKS_WAREHOUSE_ID set) — the deployed default
-#   3. committed parquet             — local dev fallback so the app runs anywhere
-GOLD_SCORES = os.environ.get("GOLD_SCORES_TABLE", "plenitude_febar.gold.churn_scores")
-ACTIONS_TABLE = os.environ.get("ACTIONS_TABLE", "plenitude_febar.gold.retention_actions")
-WAREHOUSE_ID = os.environ.get("DATABRICKS_WAREHOUSE_ID")
+st.set_page_config(page_title="Streamline Telco · Save Desk", layout="wide")
+LOCAL = Path(__file__).resolve().parents[1] / "data" / "output" / "gold_save_list.parquet"
 
 
-def _uc_conn():
-    """Databricks SQL connection, authenticated as the app's service principal."""
-    from databricks import sql as dbsql
-    from databricks.sdk.core import Config
-    cfg = Config()  # picks up the app's injected credentials (or local CLI profile)
-    return dbsql.connect(
-        server_hostname=cfg.host.replace("https://", "").rstrip("/"),
-        http_path=f"/sql/1.0/warehouses/{WAREHOUSE_ID}",
-        credentials_provider=lambda: cfg.authenticate)
-
-
-def _pg_conn():
-    import psycopg2
-    return psycopg2.connect(
-        host=os.environ["PGHOST"], dbname="databricks_postgres",
-        user=os.environ["PGUSER"], password=os.environ["PGPASSWORD"], sslmode="require")
+def _pg():
+    import psycopg
+    from databricks.sdk import WorkspaceClient
+    w = WorkspaceClient()   # app service principal credentials are injected
+    return psycopg.connect(host=os.environ["PGHOST"], dbname=os.environ.get("PGDATABASE", "databricks_postgres"),
+                           user=os.environ["PGUSER"], password=w.config.oauth_token().access_token,
+                           sslmode="require")
 
 
 @st.cache_data(ttl=300)
-def load_scores() -> pd.DataFrame:
+def load() -> pd.DataFrame:
     if os.environ.get("PGHOST"):
-        with _pg_conn() as conn:
-            return pd.read_sql("SELECT * FROM churn_scores_synced", conn)
-    if WAREHOUSE_ID:
-        with _uc_conn() as conn:
-            return pd.read_sql(f"SELECT * FROM {GOLD_SCORES}", conn)
-    p = Path(__file__).resolve().parents[1] / "data" / "output" / "gold_churn_scores.parquet"
-    return pd.read_parquet(p)
+        with _pg() as c:
+            return pd.read_sql("SELECT * FROM save_list_synced", c)
+    return pd.read_parquet(LOCAL)
 
 
-def log_action(customer_id, agent, action, offer, notes):
+def log_action(sub, agent, offer, outcome, notes):
     if os.environ.get("PGHOST"):
-        conn = _pg_conn()
-        cur = conn.cursor()
-        cur.execute("INSERT INTO retention_actions (customer_id,agent,action,offer_eur,notes)"
-                    " VALUES (%s,%s,%s,%s,%s)", (customer_id, agent, action, offer, notes))
-        conn.commit()
-    elif WAREHOUSE_ID:
-        with _uc_conn() as conn:
-            cur = conn.cursor()
-            cur.execute(f"CREATE TABLE IF NOT EXISTS {ACTIONS_TABLE} "
-                        "(customer_id STRING, agent STRING, action STRING, offer_eur INT, "
-                        "notes STRING, logged_at TIMESTAMP)")
-            cur.execute(f"INSERT INTO {ACTIONS_TABLE} "
-                        "(customer_id,agent,action,offer_eur,notes,logged_at) "
-                        "VALUES (?,?,?,?,?, current_timestamp())",
-                        [customer_id, agent, action, int(offer), notes])
-    st.session_state.setdefault("logged", []).append((customer_id, action, offer))
+        with _pg() as c:
+            c.execute("INSERT INTO save_actions(subscriber_id,agent_id,offer,outcome,notes) VALUES (%s,%s,%s,%s,%s)",
+                      (sub, agent, offer, outcome, notes))
+    st.session_state.setdefault("actions", []).append((sub, offer, outcome))
 
 
-df = load_scores()
+df = load()
+st.title("Save Desk")
+st.caption("Who to call today, why they may leave, and what to offer · Streamline Telco (synthetic data)")
 
-st.title("⚡ Voice-to-Retention — Retention Cockpit")
-st.caption("Plenitude B2C energy · churn scored from contact-centre voice + billing signals · **synthetic data**")
-
-# ---- KPI row (baseline -> after framing) ----
-at_risk = df[df.risk_band.isin(["Critical", "High"])]
-var = at_risk.monthly_bill_eur.sum() * 12
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Customers scored", f"{len(df):,}")
-c2.metric("At-risk (High+Critical)", f"{len(at_risk):,}", f"{len(at_risk)/len(df)*100:.1f}% of base")
-c3.metric("Annual revenue at risk", f"€{var:,.0f}")
-c4.metric("Margin exposed (≈22%)", f"€{var*MARGIN:,.0f}")
-
-# ---- filters ----
 with st.sidebar:
-    st.header("Call list filters")
-    bands = st.multiselect("Risk band", ["Critical", "High", "Medium", "Low"],
-                           default=["Critical", "High"])
-    regions = st.multiselect("Region", sorted(df.region.unique()))
-    only_switch = st.checkbox("Only customers who mentioned switching", value=False)
-    topn = st.slider("Show top N", 10, 200, 50, step=10)
+    region = st.multiselect("Region", sorted(df.region.unique()))
+    driver = st.multiselect("Driver", sorted(df.driver.unique()))
+    bands = st.multiselect("Risk band", ["Critical", "High", "Medium", "Low"], default=["Critical", "High"])
+v = df[df.risk_band.isin(bands)]
+if region: v = v[v.region.isin(region)]
+if driver: v = v[v.driver.isin(driver)]
 
-view = df[df.risk_band.isin(bands)]
-if regions:
-    view = view[view.region.isin(regions)]
-if only_switch:
-    view = view[view.churn_mentions == 1]
-view = view.sort_values("churn_probability", ascending=False).head(topn)
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("At-risk subscribers", f"{len(v):,}")
+c2.metric("Annual revenue at risk", f"€{v.annual_value_eur.sum()/1e3:,.0f}k")
+c3.metric("Expected loss if no action", f"€{v.value_at_risk_eur.sum()/1e3:,.0f}k")
+c4.metric("Outcomes logged (session)", len(st.session_state.get("actions", [])))
 
-st.subheader(f"📞 Prioritised retention call list — {len(view)} customers")
-show = view.copy()
-show["churn_%"] = (show.churn_probability * 100).round(1)
-show["value/yr €"] = (show.monthly_bill_eur * 12).round(0)
-st.dataframe(
-    show[["customer_id", "region", "segment", "product", "risk_band",
-          "churn_%", "value/yr €", "n_negative_calls", "n_retention_calls",
-          "churn_mentions", "top_reasons"]] if "top_reasons" in show.columns else
-    show[["customer_id", "region", "segment", "product", "risk_band",
-          "churn_%", "value/yr €", "n_negative_calls", "n_retention_calls", "churn_mentions"]],
-    use_container_width=True, hide_index=True)
+st.dataframe(v[["subscriber_id", "region", "plan", "risk_band", "churn_probability", "value_at_risk_eur",
+                "driver", "top_reasons", "next_best_offer"]].head(200), hide_index=True, use_container_width=True)
 
-# ---- action logging ----
-st.subheader("✅ Log a retention action")
-with st.form("action"):
-    a, b, c = st.columns(3)
-    cust = a.selectbox("Customer", view.customer_id.tolist() if len(view) else df.customer_id.head(20).tolist())
-    action = b.selectbox("Outcome", ["offer_made", "callback", "saved", "lost"])
-    offer = c.number_input("Offer (€/yr discount)", 0, 500, 0, step=10)
-    notes = st.text_input("Notes")
-    if st.form_submit_button("Record"):
-        log_action(cust, os.environ.get("DATABRICKS_USER", "agent"), action, offer, notes)
-        st.success(f"Logged {action} for {cust}")
-
-if st.session_state.get("logged"):
-    st.caption(f"Session actions logged: {len(st.session_state['logged'])}")
+sid = st.selectbox("Open subscriber", v.subscriber_id.head(200))
+if sid:
+    r = v[v.subscriber_id == sid].iloc[0]
+    a, b = st.columns([2, 1])
+    a.subheader(f"{sid} · {r.plan} · {r.region}")
+    a.write(f"**Churn probability:** {r.churn_probability:.0%} ({r.risk_band}) · **Value at risk:** €{r.value_at_risk_eur:,.0f}")
+    a.write("**Why they may leave:** " + r.top_reasons)
+    a.info(f"**Next best offer:** {r.next_best_offer}\n\n{r.get('talk_track', '')}")
+    with b.form("log"):
+        outcome = st.radio("Outcome", ["accepted", "declined", "callback", "no_answer"])
+        notes = st.text_input("Notes")
+        if st.form_submit_button("Log outcome"):
+            log_action(sid, os.environ.get("AGENT_ID", "AG017"), r.next_best_offer, outcome, notes)
+            st.success("Saved to Lakebase · feeds next week's retraining")

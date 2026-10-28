@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Streamline Telco · Save Desk</title>
+<!-- Click-through twin of app/app.py for the live demo. Data = top 300 rows of gold.save_list
+     exported by data/run_local_pipeline.py into demo_data.js (synthetic). -->
+<script src="demo_data.js"></script>
+<style>
+  :root{--navy:#0B2340;--ink:#1B3139;--teal:#0E8A8A;--lava:#FF3621;--amber:#E8A33D;--green:#2E9E6A;
+        --bg:#F5F7F9;--card:#fff;--line:#E3E8EC;--mute:#5F7281}
+  *{box-sizing:border-box} body{margin:0;font-family:"DM Sans",-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  header{background:var(--navy);color:#fff;display:flex;align-items:center;gap:18px;padding:14px 28px}
+  header .logo{font-weight:700;font-size:20px;letter-spacing:.2px} header .logo span{color:#5FD3C6}
+  header nav{margin-left:28px;display:flex;gap:6px}
+  header nav button{background:transparent;border:0;color:#B9C7D6;font:inherit;font-size:15px;padding:8px 14px;border-radius:8px;cursor:pointer}
+  header nav button.on{background:#1C3A5E;color:#fff}
+  header .who{margin-left:auto;font-size:13px;color:#B9C7D6}
+  main{padding:22px 28px;max-width:1500px;margin:0 auto}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .kpi .l{font-size:13px;color:var(--mute)} .kpi .v{font-size:28px;font-weight:700;margin-top:4px} .kpi .s{font-size:12px;color:var(--mute);margin-top:2px}
+  .row{display:grid;grid-template-columns:1.55fr 1fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  h2{font-size:16px;margin:0 0 12px} .filters{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  select,input[type=text]{font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  table{width:100%;border-collapse:collapse;font-size:13.5px} th{text-align:left;color:var(--mute);font-weight:600;padding:7px 8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff}
+  td{padding:8px;border-bottom:1px solid #F0F3F5} tr.sel td{background:#E9F6F5} tbody tr{cursor:pointer} tbody tr:hover td{background:#F4FAFA}
+  .scroll{max-height:560px;overflow:auto}
+  .band{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;color:#fff}
+  .Critical{background:var(--lava)} .High{background:var(--amber)} .Medium{background:#7A8D99} .Low{background:var(--green)}
+  .drv{font-size:12px;padding:2px 7px;border-radius:6px;background:#EEF2F5;color:var(--ink)}
+  .big{font-size:34px;font-weight:700} .muted{color:var(--mute);font-size:13px}
+  .reason{display:flex;gap:8px;align-items:flex-start;margin:6px 0;font-size:14px} .reason:before{content:"●";color:var(--lava);font-size:10px;margin-top:4px}
+  .offer{background:#E9F6F5;border-left:4px solid var(--teal);padding:12px 14px;border-radius:8px;margin:12px 0;font-size:14px}
+  .btns{display:flex;gap:8px;flex-wrap:wrap} .btn{border:1px solid var(--line);background:#fff;padding:8px 12px;border-radius:8px;font:inherit;font-size:14px;cursor:pointer}
+  .btn.p{background:var(--teal);color:#fff;border-color:var(--teal)} .toast{margin-top:10px;font-size:13px;color:var(--green);min-height:18px}
+  .bar{height:8px;background:#EEF2F5;border-radius:4px;overflow:hidden} .bar>i{display:block;height:100%;background:var(--lava)}
+  .genie{max-width:1000px} .chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 16px}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 12px;font-size:13.5px;cursor:pointer} .chip:hover{border-color:var(--teal)}
+  .ask{display:flex;gap:8px} .ask input{flex:1;font-size:15px;padding:11px 14px}
+  .msg{margin-top:16px} .q{font-weight:600;margin-bottom:8px} pre{background:#0F1E2B;color:#CFE3F1;padding:12px;border-radius:8px;font-size:12.5px;overflow:auto;white-space:pre-wrap}
+  .ans{font-size:15px;margin:10px 0} .hidden{display:none}
+  .flow{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-top:8px}
+  .step{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;position:relative}
+  .step b{display:block;font-size:14px;margin-bottom:6px} .step small{color:var(--mute);font-size:12.5px;line-height:1.35;display:block}
+  .step .tag{font-size:11px;color:var(--lava);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px;display:block}
+  footer{color:var(--mute);font-size:12px;text-align:center;padding:16px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Streamline<span>Telco</span> · Save Desk</div>
+  <nav>
+    <button class="on" data-tab="desk">Save list</button>
+    <button data-tab="genie">Ask Genie</button>
+    <button data-tab="how">How it works</button>
+  </nav>
+  <div class="who">Retention team · scores refreshed 02:00 · Powered by Databricks</div>
+</header>
+
+<main>
+<section id="desk">
+  <div class="kpis">
+    <div class="kpi"><div class="l">At-risk subscribers (High + Critical)</div><div class="v" id="k1"></div><div class="s" id="k1s"></div></div>
+    <div class="kpi"><div class="l">Annual revenue at risk</div><div class="v" id="k2"></div><div class="s">sum of 12-month bill, High + Critical</div></div>
+    <div class="kpi"><div class="l">Model precision on today's top 10%</div><div class="v" id="k3"></div><div class="s" id="k3s"></div></div>
+    <div class="kpi"><div class="l">Saves logged today</div><div class="v" id="k4">0</div><div class="s" id="k4s">written back to Lakebase</div></div>
+  </div>
+  <div class="row">
+    <div class="card">
+      <h2>Who to call today, ranked by value at risk</h2>
+      <div class="filters">
+        <select id="fRegion"><option value="">All regions</option></select>
+        <select id="fDriver"><option value="">All drivers</option><option>network</option><option>price</option><option>contract</option><option>service</option></select>
+        <select id="fBand"><option value="">High + Critical</option><option>Critical</option><option>High</option></select>
+        <label class="muted" style="align-self:center"><input type="checkbox" id="fSwitch"> mentioned switching</label>
+      </div>
+      <div class="scroll"><table>
+        <thead><tr><th>Subscriber</th><th>Region</th><th>Plan</th><th>Risk</th><th>Prob.</th><th>Value at risk</th><th>Driver</th></tr></thead>
+        <tbody id="tb"></tbody></table></div>
+    </div>
+    <div class="card" id="detail"></div>
+  </div>
+</section>
+
+<section id="genie" class="hidden">
+  <div class="card genie">
+    <h2>Ask Genie about the save list</h2>
+    <div class="muted">Natural-language questions over the governed gold tables in Unity Catalog. Genie writes the SQL and shows it, so every answer can be checked.</div>
+    <div class="chips" id="chips"></div>
+    <div class="ask"><input type="text" id="gq" placeholder="e.g. Which region has the most at-risk subscribers because of network problems?"><button class="btn p" id="gbtn">Ask</button></div>
+    <div id="gout"></div>
+  </div>
+</section>
+
+<section id="how" class="hidden">
+  <div class="card">
+    <h2>One governed journey, from raw data to the agent's screen</h2>
+    <div class="flow">
+      <div class="step"><span class="tag">Source</span><b>Raw data</b><small>Billing, network probes, contracts, care-call transcripts (synthetic, 20k subscribers)</small></div>
+      <div class="step"><span class="tag">Lakeflow</span><b>Ingest</b><small>Auto Loader to bronze, expectations to silver. Incremental nightly.</small></div>
+      <div class="step"><span class="tag">Unity Catalog</span><b>Govern</b><small>Medallion schemas, transcript tag + column mask, gold-only grants, lineage</small></div>
+      <div class="step"><span class="tag">Gen AI + ML</span><b>Make it intelligent</b><small>AI Functions read every call; MLflow churn model scores every subscriber</small></div>
+      <div class="step"><span class="tag">Lakebase</span><b>Serve</b><small>Save list synced to Postgres; agent outcomes written back in milliseconds</small></div>
+      <div class="step"><span class="tag">Genie</span><b>Ask</b><small>Managers ask questions in plain English over the same gold tables</small></div>
+      <div class="step"><span class="tag">Databricks App</span><b>Act</b><small>This screen: who to call, why, what to offer, log the outcome</small></div>
+    </div>
+    <p class="muted" style="margin-top:16px">Outcomes logged here flow back to the lakehouse and retrain the model weekly on what actually saved customers.</p>
+  </div>
+</section>
+</main>
+<footer>Demo on synthetic data · Streamline Telco is a fictional company · FE Bar build</footer>
+
+<script>
+const S = window.SUMMARY, L = window.SAVE_LIST;
+const eur = n => "€" + Math.round(n).toLocaleString("en-US");
+const k = n => n >= 1e6 ? "€" + (n/1e6).toFixed(2) + "M" : "€" + Math.round(n/1e3) + "k";
+document.getElementById("k1").textContent = S.hc_subs.toLocaleString("en-US");
+document.getElementById("k1s").textContent = `of ${S.n_subs.toLocaleString("en-US")} postpaid subscribers`;
+document.getElementById("k2").textContent = k(S.hc_revenue);
+document.getElementById("k3").textContent = Math.round(S.top_prec*100) + "%";
+document.getElementById("k3s").textContent = `${S.lift}× better than random calling`;
+
+const reg = [...new Set(L.map(r => r.region))].sort();
+reg.forEach(r => fRegion.insertAdjacentHTML("beforeend", `<option>${r}</option>`));
+let sel = null, saves = 0;
+
+function rows(){
+  return L.filter(r => (["High","Critical"].includes(r.risk_band))
+    && (!fRegion.value || r.region === fRegion.value) && (!fDriver.value || r.driver === fDriver.value)
+    && (!fBand.value || r.risk_band === fBand.value) && (!fSwitch.checked || r.switch_intent === 1));
+}
+function render(){
+  const v = rows();
+  tb.innerHTML = v.map(r => `<tr data-id="${r.subscriber_id}" class="${sel===r.subscriber_id?'sel':''}">
+    <td><b>${r.subscriber_id}</b></td><td>${r.region}</td><td>${r.plan}</td>
+    <td><span class="band ${r.risk_band}">${r.risk_band}</span></td><td>${Math.round(r.churn_probability*100)}%</td>
+    <td>${eur(r.value_at_risk_eur)}</td><td><span class="drv">${r.driver}</span></td></tr>`).join("");
+  tb.querySelectorAll("tr").forEach(t => t.onclick = () => { sel = t.dataset.id; render(); show(sel); });
+  if (!sel && v.length) { sel = v[0].subscriber_id; render(); show(sel); }
+}
+function show(id){
+  const r = L.find(x => x.subscriber_id === id);
+  const why = r.top_reasons.split("; ").map(x => `<div class="reason">${x}</div>`).join("");
+  detail.innerHTML = `
+    <div class="muted">${r.subscriber_id} · ${r.segment} · ${r.lines} line(s) · ${r.tenure_months} months with us</div>
+    <h2 style="margin-top:6px">${r.plan} · ${r.region}</h2>
+    <div style="display:flex;gap:28px;align-items:flex-end;margin:6px 0 10px">
+      <div><div class="muted">Churn probability, next 60 days</div><div class="big">${Math.round(r.churn_probability*100)}%</div></div>
+      <div><div class="muted">Value at risk</div><div class="big">${eur(r.value_at_risk_eur)}</div></div>
+      <div><div class="muted">Annual value</div><div class="big" style="color:var(--mute)">${eur(r.annual_value_eur)}</div></div>
+    </div>
+    <div class="bar"><i style="width:${r.churn_probability*100}%"></i></div>
+    <h2 style="margin-top:16px">Why they may leave</h2>${why}
+    <div class="offer"><b>Next best offer:</b> ${r.next_best_offer} <span class="muted">(cost ≈ ${eur(r.offer_cost_eur)})</span><br><br>
+      <b>Suggested opening:</b> ${r.talk_track}</div>
+    <div class="muted" style="margin-bottom:8px">Log the outcome</div>
+    <div class="btns">
+      <button class="btn p" data-o="accepted">Offer accepted</button><button class="btn" data-o="declined">Declined</button>
+      <button class="btn" data-o="callback">Call back</button><button class="btn" data-o="no_answer">No answer</button></div>
+    <div class="toast" id="toast"></div>`;
+  detail.querySelectorAll("[data-o]").forEach(b => b.onclick = () => {
+    if (b.dataset.o === "accepted") { saves++; k4.textContent = saves; k4s.textContent = `${eur(saves*r.annual_value_eur)} annual revenue kept (session)`; }
+    toast.textContent = `✓ ${b.dataset.o} written to Lakebase save_actions (${new Date().toLocaleTimeString()}) · feeds next retraining`;
+  });
+}
+[fRegion, fDriver, fBand, fSwitch].forEach(e => e.onchange = () => { sel = null; render(); });
+
+// ---- Genie: answers are the committed results in evidence/query_results.md
+const G = [
+  {q:"How many subscribers are High or Critical risk, and how much annual revenue do they represent?", kw:["how many","revenue","high","critical"],
+   sql:"SELECT risk_band, COUNT(*) AS subscribers, SUM(annual_value_eur) AS annual_revenue_eur\nFROM streamline_telco.gold.save_list\nWHERE risk_band IN ('High','Critical')\nGROUP BY risk_band",
+   a:"1,825 subscribers are High or Critical risk, representing about €838k of annual revenue (sample of 20,000 subscribers).",
+   t:"risk_band  subscribers  annual_revenue_eur\nCritical           799             362,126\nHigh             1,026             475,678"},
+  {q:"Which region has the most at-risk subscribers because of network problems?", kw:["region","network"],
+   sql:"SELECT region, COUNT(*) AS at_risk_network\nFROM streamline_telco.gold.save_list\nWHERE risk_band IN ('High','Critical') AND driver = 'network'\nGROUP BY region ORDER BY at_risk_network DESC",
+   a:"The South: 183 at-risk subscribers whose main driver is network quality, ahead of the North (148). That is a list to share with the network team, not only the retention team.",
+   t:"region   at_risk_network\nSouth                183\nNorth                148\nCapital              112\nCentral              105\nIslands               93\nCoast                 42"},
+  {q:"Show the 10 subscribers with the highest value at risk and what we should offer them", kw:["top","10","highest","offer"],
+   sql:"SELECT subscriber_id, plan, churn_probability, value_at_risk_eur, next_best_offer\nFROM streamline_telco.gold.save_list\nORDER BY value_at_risk_eur DESC LIMIT 10",
+   a:"The top 10 are mostly Fibre + Mobile households. Half need a loyalty price match after a bill increase, three need a network fix.",
+   t:L.slice(0,10).map(r=>`${r.subscriber_id}  ${r.plan.padEnd(16)} ${r.churn_probability.toFixed(2)}  ${eur(r.value_at_risk_eur).padStart(7)}  ${r.next_best_offer}`).join("\n")},
+  {q:"What is the churn rate for customers who mentioned switching on a care call vs. those who did not?", kw:["switch","mention","care call"],
+   sql:"SELECT switch_intent, ROUND(AVG(churned_next_60d)*100,1) AS churn_rate_pct\nFROM streamline_telco.gold.subscriber_features\nGROUP BY switch_intent",
+   a:"Customers who mentioned switching on a care call churned at 45.2%, versus 10.4% for everyone else: 4.3 times higher. Today that signal stays in the call recording.",
+   t:"switch_intent  churn_rate_pct\n0                        10.4\n1                        45.2"},
+  {q:"Churn rate by plan, highest first", kw:["plan"],
+   sql:"SELECT plan, ROUND(AVG(churned_next_60d)*100,1) AS churn_rate_pct\nFROM streamline_telco.gold.subscriber_features\nGROUP BY plan ORDER BY churn_rate_pct DESC",
+   a:"Churn is similar across plans (14.0% to 15.8%). The plan is not the driver; network experience and what customers say on care calls are.",
+   t:"plan              churn_rate_pct\nMobile 50GB                 15.8\nFibre + Mobile              15.2\nFibre 1Gb                   15.2\nMobile Unlimited            14.9\nMobile 10GB                 14.0"},
+];
+G.forEach((g,i) => chips.insertAdjacentHTML("beforeend", `<span class="chip" data-i="${i}">${g.q}</span>`));
+chips.querySelectorAll(".chip").forEach(c => c.onclick = () => { gq.value = G[c.dataset.i].q; ask(); });
+function ask(){
+  const s = gq.value.toLowerCase(); if (!s) return;
+  let best = G.map(g => [g, g.kw.filter(w => s.includes(w)).length]).sort((a,b) => b[1]-a[1])[0];
+  const g = best[1] ? best[0] : null;
+  gout.innerHTML = g ? `<div class="msg"><div class="q">${gq.value}</div><div class="ans">${g.a}</div>
+    <div class="muted">Generated SQL</div><pre>${g.sql}</pre><div class="muted">Result</div><pre>${g.t}</pre></div>`
+    : `<div class="msg muted">In this offline demo, try one of the suggested questions.</div>`;
+}
+gbtn.onclick = ask; gq.onkeydown = e => { if (e.key === "Enter") ask(); };
+
+document.querySelectorAll("header nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("header nav button").forEach(x => x.classList.toggle("on", x === b));
+  ["desk","genie","how"].forEach(t => document.getElementById(t).classList.toggle("hidden", t !== b.dataset.tab));
+});
+render();
+</script>
+</body>
+</html>

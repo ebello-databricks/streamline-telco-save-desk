@@ -1,22 +1,23 @@
 """
-FE Bar build — Plenitude "Voice-to-Retention" | Synthetic data generator
-=========================================================================
-Generates a fully synthetic, customer-SAFE dataset for a retail-energy
-(Plenitude / Eni B2C) churn use case. NO real customer data is used.
+FE Bar build — Streamline Telco "Save Desk" | Synthetic data generator
+=======================================================================
+Generates a fully synthetic, customer-SAFE dataset for a telecom
+(consumer postpaid mobile + broadband) churn use case.
+Streamline Telco is a fictional company. NO real customer data is used.
 
-Produces the RAW landing tables that Lakeflow ingests:
-  - customers.parquet        one row per B2C energy customer
-  - consumption.parquet      12 monthly bills per customer
-  - contracts.parquet        one active contract per customer
-  - calls.parquet            inbound contact-centre calls WITH transcripts
-  - churn_labels.parquet     ground-truth: did the customer leave in next 90d
+Produces the RAW landing files that Lakeflow ingests:
+  - subscribers.parquet      one row per postpaid subscriber
+  - usage.parquet            6 monthly usage + network-experience rows / sub
+  - contracts.parquet        plan, price, handset / commitment end date
+  - care_calls.parquet       inbound care calls WITH transcripts
+  - churn_labels.parquet     ground truth: did the subscriber port out in next 60d
 
-Churn is generated from a latent risk model driven by real-world signals
-(negative call sentiment, retention-queue calls, bill shock, contract
-near expiry, payment method, tenure, competitor mentions), so a model
-trained downstream recovers genuine, explainable patterns.
+Churn comes from a latent risk model driven by real telco signals
+(dropped calls, slow data, bill shock, commitment ending, competitor
+mentions in care calls, low tenure), so the model trained downstream
+recovers genuine, explainable patterns.
 
-Run:  python generate_synthetic_data.py
+Run:  python data/generate_synthetic_data.py
 """
 from __future__ import annotations
 import json, random, datetime as dt
@@ -31,71 +32,67 @@ np.random.seed(SEED)
 OUT = Path(__file__).resolve().parent / "output"
 OUT.mkdir(parents=True, exist_ok=True)
 
-N_CUSTOMERS = 15_000
-REF_DATE = dt.date(2026, 6, 30)          # "today" for the snapshot
-HISTORY_MONTHS = 12
+N_SUBS = 20_000
+REF_DATE = dt.date(2026, 9, 30)          # "today" for the snapshot
+HISTORY_MONTHS = 6
 
-REGIONS = {
-    "Lombardia": 0.19, "Lazio": 0.12, "Campania": 0.10, "Sicilia": 0.09,
-    "Veneto": 0.09, "Emilia-Romagna": 0.08, "Piemonte": 0.08, "Puglia": 0.07,
-    "Toscana": 0.07, "Calabria": 0.04, "Liguria": 0.03, "Altre": 0.04,
+REGIONS = {"North": 0.24, "Capital": 0.22, "Central": 0.18, "South": 0.20, "Islands": 0.08, "Coast": 0.08}
+PLANS = {  # plan -> (monthly price EUR, data GB)
+    "Mobile 10GB": (12.0, 10), "Mobile 50GB": (19.0, 50), "Mobile Unlimited": (29.0, 999),
+    "Fibre + Mobile": (45.0, 999), "Fibre 1Gb": (32.0, 0),
 }
-CITY = {
-    "Lombardia": "Milano", "Lazio": "Roma", "Campania": "Napoli", "Sicilia": "Palermo",
-    "Veneto": "Verona", "Emilia-Romagna": "Bologna", "Piemonte": "Torino", "Puglia": "Bari",
-    "Toscana": "Firenze", "Calabria": "Reggio Calabria", "Liguria": "Genova", "Altre": "Perugia",
-}
-PRODUCTS = ["power", "gas", "dual"]
-CONTRACT_TYPES = ["fixed", "variable"]
-PAYMENT = ["direct_debit", "bank_transfer", "postal", "card"]
-CHANNELS = ["web", "agency", "call_center", "comparator", "partner"]
-QUEUES = ["billing", "technical", "retention", "commercial", "self_service"]
+PAYMENT = ["direct_debit", "card", "bank_transfer"]
+CHANNELS = ["store", "online", "telesales", "comparison_site"]
+QUEUES = ["billing", "network", "retention", "device", "general"]
 
 # ---------------------------------------------------------------------------
-# Contact-centre transcript templates, keyed to (intent, sentiment).
-# Italian, short, realistic. English gloss kept in a comment for the deck.
+# Care-call transcripts keyed to (intent, sentiment). Short and realistic.
 # ---------------------------------------------------------------------------
 TRANSCRIPTS = {
     ("billing", "negative"): [
-        "Buongiorno, ho ricevuto una bolletta di 240 euro, il triplo del solito. È assurdo, voglio spiegazioni o cambio fornitore.",
-        "La fattura di questo mese è sbagliata, il conguaglio è troppo alto. Sono molto arrabbiato, sto valutando di andare da Enel.",
-        "Non capisco perché pago sempre di più, gli importi continuano a salire. Se non risolvete disdico il contratto.",
+        "My bill went up again this month, nearly double what I signed up for. This is ridiculous, explain it or I am leaving.",
+        "You charged me roaming fees I never used. I am really annoyed, I am looking at other providers.",
+        "Every month there is some new charge on my bill. If you cannot fix it I will cancel the contract.",
     ],
     ("billing", "neutral"): [
-        "Salve, vorrei capire meglio le voci in bolletta, in particolare gli oneri di sistema.",
-        "Buongiorno, volevo verificare la data di scadenza della fattura di giugno.",
+        "Hi, I would like to understand the extra line on my latest invoice.",
+        "Can you confirm when my direct debit will be taken this month?",
+    ],
+    ("network", "negative"): [
+        "My calls keep dropping at home and the signal is terrible. I pay for a service I do not get, this is unacceptable.",
+        "Mobile data is so slow I cannot even load a map. Third time I call about it and nothing changes.",
+        "The fibre goes down every evening. I work from home, I cannot keep living with these outages.",
+    ],
+    ("network", "neutral"): [
+        "Is there any maintenance planned in my area this week? The signal was weak yesterday.",
+        "I would like to check fibre availability at my new address.",
     ],
     ("retention", "negative"): [
-        "Ho ricevuto un'offerta da un altro operatore molto più conveniente. Se non mi allineate il prezzo passo alla concorrenza.",
-        "Voglio disdire il contratto, ho trovato di meglio altrove. La vostra tariffa non è più competitiva.",
-        "Sto pensando di cambiare fornitore, il prezzo del kWh è troppo alto rispetto al mercato.",
+        "Another operator offered me unlimited data for half the price. Match it or I am porting my number out.",
+        "I want to cancel, I found a better deal elsewhere. Please send me my PAC code to switch.",
+        "Your prices are no longer competitive. I am thinking of switching provider when my contract ends.",
     ],
     ("retention", "neutral"): [
-        "Vorrei sapere se ci sono offerte migliori per il mio profilo di consumo prima del rinnovo.",
-        "Il mio contratto è in scadenza, che condizioni mi proponete per il rinnovo?",
+        "My contract ends next month, what can you offer me to renew?",
+        "Before I renew, are there better plans for how I use my phone?",
     ],
-    ("technical", "negative"): [
-        "Sono senza corrente da due giorni e nessuno mi ha richiamato. Servizio pessimo, così non va bene.",
-        "Il contatore dà errore e ho segnalato tre volte senza risposta. Sono stanco di questi disservizi.",
+    ("device", "negative"): [
+        "The phone you sold me is faulty and the repair is taking weeks. Very disappointed with the service.",
     ],
-    ("technical", "neutral"): [
-        "Buongiorno, vorrei prenotare la lettura del contatore per l'autolettura.",
-        "Salve, ho bisogno di assistenza per attivare l'app e vedere i consumi.",
+    ("device", "neutral"): [
+        "Am I eligible for a handset upgrade yet?",
+        "How do I activate the eSIM on my new phone?",
     ],
-    ("commercial", "positive"): [
-        "Grazie mille, l'operatore è stato gentilissimo e ha risolto subito. Sono molto soddisfatto del servizio.",
-        "Volevo aggiungere la fornitura gas alla mia utenza luce, mi trovo benissimo con voi.",
+    ("general", "positive"): [
+        "Thanks a lot, the agent was really helpful and fixed it straight away. Very happy with the service.",
+        "I would like to add a second line for my daughter, I am very satisfied with you.",
     ],
-    ("commercial", "neutral"): [
-        "Vorrei attivare la fornitura per la mia seconda casa, che documenti servono?",
-        "Buongiorno, come posso attivare la fatturazione elettronica e il pagamento con addebito?",
-    ],
-    ("self_service", "neutral"): [
-        "Volevo solo comunicare l'autolettura del contatore, grazie.",
-        "Confermo l'appuntamento per il tecnico, tutto ok.",
+    ("general", "neutral"): [
+        "I just wanted to update my email address, thanks.",
+        "Can you tell me how to set up voicemail?",
     ],
 }
-COMPETITOR_TERMS = ["Enel", "concorrenza", "altro operatore", "cambio fornitore", "disdire"]
+COMPETITOR_TERMS = ["other operator", "porting", "pac code", "switching provider", "other providers", "better deal", "cancel"]
 
 
 def weighted(dic):
@@ -103,144 +100,122 @@ def weighted(dic):
     return np.random.choice(ks, p=ps)
 
 
-def build_customers() -> pd.DataFrame:
+def build_subscribers() -> pd.DataFrame:
     rows = []
-    for i in range(N_CUSTOMERS):
+    for i in range(N_SUBS):
         region = weighted(REGIONS)
-        product = random.choices(PRODUCTS, weights=[0.42, 0.18, 0.40])[0]
-        ctype = random.choices(CONTRACT_TYPES, weights=[0.55, 0.45])[0]
-        segment = random.choices(["residential", "microbusiness"], weights=[0.86, 0.14])[0]
-        tenure = int(np.clip(np.random.gamma(2.2, 14), 1, 180))
-        pay = random.choices(PAYMENT, weights=[0.52, 0.20, 0.10, 0.18])[0]
-        channel = random.choices(CHANNELS, weights=[0.30, 0.22, 0.18, 0.18, 0.12])[0]
-        base_bill = {"power": 68, "gas": 74, "dual": 128}[product]
-        base_bill *= (1.9 if segment == "microbusiness" else 1.0)
-        monthly_bill = round(max(18, np.random.normal(base_bill, base_bill * 0.28)), 2)
-        contract_end = REF_DATE + dt.timedelta(days=int(np.random.normal(300, 210)))
+        plan = random.choices(list(PLANS), weights=[0.18, 0.30, 0.22, 0.18, 0.12])[0]
+        tenure = int(np.clip(np.random.gamma(2.0, 15), 1, 160))
         rows.append(dict(
-            customer_id=f"PLN{100000+i}",
-            region=region, city=CITY[region], segment=segment,
-            product=product, contract_type=ctype, payment_method=pay,
-            signup_channel=channel, ebilling=int(random.random() < 0.58),
-            tenure_months=tenure, monthly_bill_eur=monthly_bill,
-            contract_end_date=contract_end.isoformat(),
+            subscriber_id=f"STL{100000+i}",
+            region=region,
+            segment=random.choices(["consumer", "family", "youth"], weights=[0.62, 0.26, 0.12])[0],
+            age_band=random.choices(["18-24", "25-34", "35-49", "50-64", "65+"], weights=[0.12, 0.24, 0.30, 0.22, 0.12])[0],
+            payment_method=random.choices(PAYMENT, weights=[0.62, 0.28, 0.10])[0],
+            acquisition_channel=random.choices(CHANNELS, weights=[0.34, 0.30, 0.16, 0.20])[0],
+            tenure_months=tenure,
+            plan=plan,
+            lines=random.choices([1, 2, 3, 4], weights=[0.62, 0.22, 0.11, 0.05])[0],
         ))
     return pd.DataFrame(rows)
 
 
-def build_consumption(cust: pd.DataFrame) -> pd.DataFrame:
+def build_contracts(subs: pd.DataFrame) -> pd.DataFrame:
     rows = []
+    for s in subs.itertuples():
+        price, _ = PLANS[s.plan]
+        commitment_end = REF_DATE + dt.timedelta(days=int(np.random.normal(260, 220)))
+        rows.append(dict(
+            contract_id=f"CTR{s.subscriber_id[3:]}", subscriber_id=s.subscriber_id,
+            plan=s.plan, monthly_price_eur=round(price * s.lines * np.random.uniform(0.85, 1.1), 2),
+            handset_financed=int(random.random() < 0.45),
+            start_date=(REF_DATE - dt.timedelta(days=int(s.tenure_months * 30.4))).isoformat(),
+            commitment_end_date=commitment_end.isoformat(), status="active",
+        ))
+    return pd.DataFrame(rows)
+
+
+def build_usage(subs: pd.DataFrame, contr: pd.DataFrame) -> pd.DataFrame:
+    """Monthly usage + network experience. A subset suffer degraded network
+    (more dropped calls, slower data) or bill shock in the last 2 months."""
+    price = contr.set_index("subscriber_id").monthly_price_eur
     months = pd.date_range(end=pd.Timestamp(REF_DATE).to_period("M").to_timestamp(),
                            periods=HISTORY_MONTHS, freq="MS")
-    for c in cust.to_dict('records'):
-        c = type('R', (), c)  # dot-access wrapper
-        # seasonal shape (winter heating for gas/dual, summer cooling for power)
-        base = c.monthly_bill_eur
-        # a subset get a "bill shock" ramp in the last 3 months -> churn driver
-        shock = np.random.random() < 0.22
-        for k, m in enumerate(months):
-            season = 1.0 + 0.22 * np.sin((m.month - 1) / 12 * 2 * np.pi + (0 if c.product == "power" else np.pi))
-            trend = 1.0
-            if shock and k >= HISTORY_MONTHS - 3:
-                trend = 1.0 + 0.18 * (k - (HISTORY_MONTHS - 4))
-            amt = round(max(10, base * season * trend * np.random.normal(1, 0.06)), 2)
-            kwh = round(amt / 0.31 * np.random.normal(1, 0.05), 1) if c.product != "gas" else 0.0
-            smc = round(amt / 1.05 * np.random.normal(1, 0.05), 1) if c.product != "power" else 0.0
-            rows.append(dict(customer_id=c.customer_id, month=m.date().isoformat(),
-                             bill_amount_eur=amt, kwh=kwh, smc_gas=smc))
-    return pd.DataFrame(rows)
-
-
-def build_contracts(cust: pd.DataFrame) -> pd.DataFrame:
     rows = []
-    for c in cust.to_dict('records'):
-        c = type('R', (), c)
-        start = REF_DATE - dt.timedelta(days=int(c.tenure_months * 30.4))
-        tariff = round(np.random.uniform(0.089, 0.164), 3) if c.product != "gas" else round(np.random.uniform(0.42, 0.78), 3)
-        rows.append(dict(
-            contract_id=f"CNT{c.customer_id[3:]}", customer_id=c.customer_id,
-            product=c.product, contract_type=c.contract_type,
-            start_date=start.isoformat(), end_date=c.contract_end_date,
-            unit_tariff=tariff, status="active",
-        ))
+    for s in subs.itertuples():
+        bad_network = np.random.random() < (0.22 if s.region in ("South", "Islands") else 0.12)
+        bill_shock = np.random.random() < 0.15
+        _, gb = PLANS[s.plan]
+        for k, m in enumerate(months):
+            recent = k >= HISTORY_MONTHS - 2
+            dropped = np.random.poisson(6 if (bad_network and recent) else 1.2)
+            speed = max(2, np.random.normal(9 if (bad_network and recent) else 38, 6))
+            bill = price[s.subscriber_id] * (np.random.uniform(1.25, 1.6) if (bill_shock and recent) else np.random.normal(1, 0.03))
+            rows.append(dict(
+                subscriber_id=s.subscriber_id, month=m.date().isoformat(),
+                data_gb_used=round(max(0, np.random.normal(min(gb, 60) * 0.6, 5)), 1) if gb else 0.0,
+                voice_minutes=int(max(0, np.random.normal(320, 110))),
+                dropped_calls=int(dropped), avg_dl_speed_mbps=round(speed, 1),
+                bill_amount_eur=round(bill, 2),
+            ))
     return pd.DataFrame(rows)
 
 
-def build_calls_and_churn(cust: pd.DataFrame, cons: pd.DataFrame):
-    """Generate calls with transcripts + latent churn. Signals in the calls
-    and billing must line up with the churn label so the model is real."""
-    # precompute recent bill trend per customer (last 3 vs prior 3)
-    cons_sorted = cons.sort_values(["customer_id", "month"])
-    last3 = cons_sorted.groupby("customer_id").tail(3).groupby("customer_id").bill_amount_eur.mean()
-    prev3 = (cons_sorted.groupby("customer_id").apply(lambda g: g.iloc[-6:-3].bill_amount_eur.mean(),
-             include_groups=False))
-    bill_trend = ((last3 - prev3) / prev3.clip(lower=1)).fillna(0)
+def build_calls_and_churn(subs, contr, usage):
+    """Care calls with transcripts + latent churn. Signals in calls, network
+    and billing line up with the churn label so the model is real."""
+    u = usage.sort_values(["subscriber_id", "month"])
+    last2 = u.groupby("subscriber_id").tail(2).groupby("subscriber_id")
+    first4 = u.groupby("subscriber_id").head(4).groupby("subscriber_id")
+    dropped = last2.dropped_calls.mean()
+    speed = last2.avg_dl_speed_mbps.mean()
+    bill_trend = (last2.bill_amount_eur.mean() - first4.bill_amount_eur.mean()) / first4.bill_amount_eur.mean()
+    cend = contr.set_index("subscriber_id").commitment_end_date
 
     call_rows, churn_rows = [], []
-    for c in cust.to_dict('records'):
-        c = type('R', (), c)
-        cid = c.customer_id
-        trend = float(bill_trend.get(cid, 0.0))
-        days_to_end = (dt.date.fromisoformat(c.contract_end_date) - REF_DATE).days
+    for s in subs.itertuples():
+        sid = s.subscriber_id
+        dr, sp, bt = float(dropped[sid]), float(speed[sid]), float(bill_trend[sid])
+        days_to_end = (dt.date.fromisoformat(cend[sid]) - REF_DATE).days
+        net_pain = dr > 3.5 or sp < 15
+        # latent churn propensity --------------------------------------------
+        z = -2.6
+        z += 0.12 * max(0, dr - 1.5) + (0.7 if sp < 15 else 0)
+        z += 2.0 * max(0, bt)
+        z += 0.8 if 0 <= days_to_end < 60 else (0.4 if days_to_end < 0 else 0)   # out of contract = free to leave
+        z += -0.01 * s.tenure_months
+        z += 0.45 if s.acquisition_channel == "comparison_site" else 0
+        z += -0.35 if s.lines > 1 else 0
+        z += 0.3 if s.payment_method == "card" else 0
 
-        # latent churn propensity ---------------------------------------
-        z = -2.15
-        z += 2.2 * max(0, trend)                       # bill shock
-        z += 0.9 if c.contract_type == "variable" else 0.0
-        z += 0.6 if c.payment_method in ("postal", "card") else -0.35 if c.payment_method == "direct_debit" else 0.0
-        z += 0.5 if days_to_end < 90 else 0.0
-        z += -0.012 * c.tenure_months                  # loyalty
-        z += 0.4 if c.signup_channel == "comparator" else 0.0
-        z += -0.3 if c.ebilling else 0.0
-
-        # number of calls in last 90 days, more if unhappy
-        lam = 0.5 + 1.6 * max(0, trend) + (0.4 if days_to_end < 90 else 0)
+        lam = 0.4 + (1.0 if net_pain else 0) + 1.5 * max(0, bt) + (0.5 if 0 <= days_to_end < 60 else 0)
         n_calls = np.random.poisson(lam)
-        neg_calls = 0; retention_calls = 0; competitor_mention = 0
-        sent_scores = []
-        for j in range(n_calls):
-            # pick intent influenced by the customer's situation
-            if trend > 0.12 and random.random() < 0.6:
-                intent = "billing"
-            elif days_to_end < 90 and random.random() < 0.5:
-                intent = "retention"
+        neg = ret = comp = 0
+        for _ in range(n_calls):
+            if net_pain and random.random() < 0.55: intent = "network"
+            elif bt > 0.15 and random.random() < 0.6: intent = "billing"
+            elif days_to_end < 60 and random.random() < 0.45: intent = "retention"
+            else: intent = random.choices(QUEUES, weights=[0.25, 0.20, 0.10, 0.20, 0.25])[0]
+            unhappy_p = 1 / (1 + np.exp(-(z + 0.8)))
+            if intent in ("billing", "network", "retention", "device"):
+                sentiment = "negative" if random.random() < min(0.85, 0.3 + unhappy_p) else "neutral"
             else:
-                intent = random.choices(QUEUES, weights=[0.30, 0.22, 0.14, 0.16, 0.18])[0]
-            # sentiment influenced by propensity
-            unhappy_p = 1 / (1 + np.exp(-(z + 0.6)))
-            if intent in ("billing", "retention", "technical"):
-                sentiment = "negative" if random.random() < min(0.85, 0.35 + unhappy_p) else "neutral"
-            elif intent == "commercial":
-                sentiment = "positive" if random.random() < 0.6 else "neutral"
-            else:
-                sentiment = "neutral"
-            key = (intent, sentiment)
-            if key not in TRANSCRIPTS:
-                key = (intent, "neutral") if (intent, "neutral") in TRANSCRIPTS else ("self_service", "neutral")
-            transcript = random.choice(TRANSCRIPTS[key])
-            comp = int(any(t.lower() in transcript.lower() for t in COMPETITOR_TERMS))
-            competitor_mention = max(competitor_mention, comp)
-            if sentiment == "negative": neg_calls += 1
-            if intent == "retention": retention_calls += 1
-            sent_scores.append({"negative": -0.8, "neutral": 0.05, "positive": 0.7}[sentiment]
-                               + np.random.normal(0, 0.08))
-            call_ts = REF_DATE - dt.timedelta(days=random.randint(0, 89),
-                                              hours=random.randint(8, 19))
+                sentiment = "positive" if random.random() < 0.35 else "neutral"
+            key = (intent, sentiment) if (intent, sentiment) in TRANSCRIPTS else (intent, "neutral")
+            if key not in TRANSCRIPTS: key = ("general", "neutral")
+            text = random.choice(TRANSCRIPTS[key])
+            c = int(any(t in text.lower() for t in COMPETITOR_TERMS))
+            comp = max(comp, c); neg += sentiment == "negative"; ret += intent == "retention"
+            ts = dt.datetime.combine(REF_DATE - dt.timedelta(days=random.randint(0, 59)),
+                                     dt.time(random.randint(8, 20), random.randint(0, 59)))
             call_rows.append(dict(
-                call_id=f"CALL{len(call_rows)+1:07d}", customer_id=cid,
-                call_ts=dt.datetime.combine(call_ts if isinstance(call_ts, dt.date) else REF_DATE, dt.time(random.randint(8,19), random.randint(0,59))).isoformat(),
-                queue=intent, agent_id=f"AG{random.randint(1,180):03d}",
-                duration_sec=int(np.clip(np.random.normal(210, 90), 30, 900)),
-                transcript=transcript,
+                call_id=f"CALL{len(call_rows)+1:07d}", subscriber_id=sid, call_ts=ts.isoformat(),
+                queue=intent, agent_id=f"AG{random.randint(1, 220):03d}",
+                duration_sec=int(np.clip(np.random.normal(240, 100), 30, 1200)), transcript=text,
             ))
-
-        # calls feed back into churn propensity
-        z += 0.55 * neg_calls + 0.8 * retention_calls + 0.7 * competitor_mention
-        churn_p = 1 / (1 + np.exp(-z))
-        churned = int(random.random() < churn_p)
-        churn_rows.append(dict(customer_id=cid, churned_next_90d=churned,
-                               _latent_p=round(churn_p, 4)))
-
+        z += 0.5 * neg + 0.7 * ret + 0.9 * comp
+        p = 1 / (1 + np.exp(-z))
+        churn_rows.append(dict(subscriber_id=sid, churned_next_60d=int(random.random() < p), _latent_p=round(p, 4)))
     return pd.DataFrame(call_rows), pd.DataFrame(churn_rows)
 
 
@@ -249,31 +224,27 @@ def main():
     def note(m):
         print(m); log.append(m)
 
-    note(f"[gen] seed={SEED}  ref_date={REF_DATE}  customers={N_CUSTOMERS}")
-    cust = build_customers();                 note(f"[gen] customers      -> {len(cust):>7,} rows")
-    cons = build_consumption(cust);           note(f"[gen] consumption    -> {len(cons):>7,} rows")
-    contr = build_contracts(cust);            note(f"[gen] contracts      -> {len(contr):>7,} rows")
-    calls, churn = build_calls_and_churn(cust, cons)
-    note(f"[gen] calls          -> {len(calls):>7,} rows")
+    note(f"[gen] seed={SEED}  ref_date={REF_DATE}  subscribers={N_SUBS}")
+    subs = build_subscribers();                 note(f"[gen] subscribers    -> {len(subs):>7,} rows")
+    contr = build_contracts(subs);              note(f"[gen] contracts      -> {len(contr):>7,} rows")
+    usage = build_usage(subs, contr);           note(f"[gen] usage          -> {len(usage):>7,} rows")
+    calls, churn = build_calls_and_churn(subs, contr, usage)
+    note(f"[gen] care_calls     -> {len(calls):>7,} rows")
     note(f"[gen] churn_labels   -> {len(churn):>7,} rows")
+    rate = churn.churned_next_60d.mean()
+    note(f"[gen] churn rate (synthetic, next 60d) = {rate:.3%}")
 
-    rate = churn.churned_next_90d.mean()
-    note(f"[gen] churn rate (synthetic 90d) = {rate:.3%}")
-    note(f"[gen] negative-call customers    = {calls.assign(neg=calls.transcript.isin([t for k,v in TRANSCRIPTS.items() if k[1]=='negative' for t in v])).groupby('customer_id').neg.max().mean():.1%}")
-
-    # write parquet (efficient) + small CSV samples (human/text readable)
-    for name, df in [("customers", cust), ("consumption", cons), ("contracts", contr),
-                     ("calls", calls), ("churn_labels", churn)]:
+    for name, df in [("subscribers", subs), ("contracts", contr), ("usage", usage),
+                     ("care_calls", calls), ("churn_labels", churn)]:
         df.to_parquet(OUT / f"{name}.parquet", index=False)
         df.head(50).to_csv(OUT / f"{name}_sample.csv", index=False)
-    note(f"[gen] wrote parquet + *_sample.csv to {OUT}")
+    note(f"[gen] wrote parquet + *_sample.csv to data/output/")
 
     (OUT / "generation.log").write_text("\n".join(log) + "\n")
-    meta = dict(seed=SEED, ref_date=REF_DATE.isoformat(), n_customers=N_CUSTOMERS,
-                churn_rate=round(float(rate), 4),
-                tables={n: int(len(d)) for n, d in
-                        [("customers", cust), ("consumption", cons), ("contracts", contr),
-                         ("calls", calls), ("churn_labels", churn)]})
+    meta = dict(company="Streamline Telco (fictional)", seed=SEED, ref_date=REF_DATE.isoformat(),
+                n_subscribers=N_SUBS, churn_rate_60d=round(float(rate), 4),
+                tables={n: int(len(d)) for n, d in [("subscribers", subs), ("contracts", contr),
+                        ("usage", usage), ("care_calls", calls), ("churn_labels", churn)]})
     (OUT / "dataset_meta.json").write_text(json.dumps(meta, indent=2))
     note("[gen] done.")
 

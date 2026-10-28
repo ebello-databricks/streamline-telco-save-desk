@@ -1,9 +1,8 @@
-[gen] seed=42  ref_date=2026-06-30  customers=15000
-[gen] customers      ->  15,000 rows
-[gen] consumption    -> 180,000 rows
-[gen] contracts      ->  15,000 rows
-[gen] calls          ->  10,646 rows
-[gen] churn_labels   ->  15,000 rows
-[gen] churn rate (synthetic 90d) = 22.287%
-[gen] negative-call customers    = 53.8%
-[gen] wrote parquet + *_sample.csv to /Users/emmanuele.bello/Downloads/fe-bar/data/output
+[gen] seed=42  ref_date=2026-09-30  subscribers=20000
+[gen] subscribers    ->  20,000 rows
+[gen] contracts      ->  20,000 rows
+[gen] usage          -> 120,000 rows
+[gen] care_calls     ->  13,749 rows
+[gen] churn_labels   ->  20,000 rows
+[gen] churn rate (synthetic, next 60d) = 15.070%
+[gen] wrote parquet + *_sample.csv to data/output/

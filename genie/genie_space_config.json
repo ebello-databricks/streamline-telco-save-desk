@@ -1,19 +1,23 @@
 {
-  "title": "Plenitude — Voice-to-Retention",
-  "description": "Natural-language access to B2C energy churn scores enriched with contact-centre voice signals. Ask about at-risk customers, churn drivers, and value at risk. All data is synthetic.",
-  "warehouse_id": "c8d3657be7ec0f0f",
+  "title": "Streamline Telco — Save Desk",
+  "description": "Ask in plain English about postpaid subscribers at risk of churning, why, what to offer them and how much revenue is at stake. Synthetic data.",
+  "space_id": "",
+  "warehouse_id": "<your-serverless-sql-warehouse-id>",
   "tables": [
-    "plenitude_febar.gold.churn_scores",
-    "plenitude_febar.gold.customer_features",
-    "plenitude_febar.silver.calls_enriched"
+    "streamline_telco.gold.save_list",
+    "streamline_telco.gold.subscriber_features",
+    "streamline_telco.silver.care_calls_enriched"
   ],
-  "instructions": "This space serves Plenitude's B2C retail-energy retention team. `churn_scores` has one row per customer with churn_probability (0-1) and risk_band (Low/Medium/High/Critical). `customer_features` holds billing trend, contract, and Gen-AI voice features. `calls_enriched` has per-call sentiment, intent, and churn_signal derived from transcripts. 'At risk' means risk_band IN ('High','Critical'). 'Mentioned switching' means churn_mentions = 1 (customer_features) or churn_signal = 1 (calls_enriched). Value at risk = sum(monthly_bill_eur) * 12 for the selected customers. Region names are Italian (Lombardia, Lazio, ...). Always order at-risk lists by churn_probability descending.",
+  "instructions": "This space serves Streamline Telco's retention team. gold.save_list has one row per postpaid subscriber: churn_probability (0-1, next 60 days), risk_band (Low/Medium/High/Critical), value_at_risk_eur (= annual_value_eur * churn_probability), driver (network/price/contract/service), next_best_offer and top_reasons. 'At risk' means risk_band IN ('High','Critical'). 'Mentioned switching' means switch_intent = 1. 'Revenue at risk' means SUM(annual_value_eur) for the selected subscribers unless the user says 'expected', then SUM(value_at_risk_eur). Always sort at-risk lists by value_at_risk_eur descending. Never return transcript text; it is masked for this audience.",
   "sample_questions": [
-    "Show the top 20 critical-risk customers ordered by churn probability",
-    "Quali clienti in Lombardia con tariffa variabile hanno parlato di cambio fornitore?",
-    "What is the churn rate by region, highest first?",
-    "How much annual revenue is represented by the High and Critical bands?",
-    "Which customers had a negative billing call and a bill increase above 15%?",
-    "Average churn probability by contract type and payment method"
+    "How many subscribers are High or Critical risk, and how much annual revenue do they represent?",
+    "Which region has the most at-risk subscribers because of network problems?",
+    "Show the 10 subscribers with the highest value at risk and what we should offer them",
+    "What is the churn rate for customers who mentioned switching on a care call vs. those who did not?",
+    "Churn rate by plan, highest first"
+  ],
+  "trusted_sql": [
+    {"question": "Revenue at risk by band",
+     "sql": "SELECT risk_band, COUNT(*) AS subscribers, SUM(annual_value_eur) AS annual_revenue_eur, SUM(value_at_risk_eur) AS expected_loss_eur FROM streamline_telco.gold.save_list WHERE risk_band IN ('High','Critical') GROUP BY risk_band"}
   ]
 }

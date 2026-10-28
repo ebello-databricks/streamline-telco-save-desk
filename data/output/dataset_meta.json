@@ -1,13 +1,14 @@
 {
+  "company": "Streamline Telco (fictional)",
   "seed": 42,
-  "ref_date": "2026-06-30",
-  "n_customers": 15000,
-  "churn_rate": 0.2229,
+  "ref_date": "2026-09-30",
+  "n_subscribers": 20000,
+  "churn_rate_60d": 0.1507,
   "tables": {
-    "customers": 15000,
-    "consumption": 180000,
-    "contracts": 15000,
-    "calls": 10646,
-    "churn_labels": 15000
+    "subscribers": 20000,
+    "contracts": 20000,
+    "usage": 120000,
+    "care_calls": 13749,
+    "churn_labels": 20000
   }
 }

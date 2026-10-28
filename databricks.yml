@@ -1,88 +1,67 @@
-# Databricks Asset Bundle — Plenitude "Voice-to-Retention" (FE Bar build)
-# Deploys the whole end-to-end journey into a workspace:
-#   Lakeflow pipeline · churn/serving/genie jobs · Lakebase · dashboard · app
+# Databricks Asset Bundle — Streamline Telco "Save Desk" (FE Bar build)
+# One deployable unit for the whole journey:
+#   Lakeflow pipeline -> Gen AI enrichment -> churn model -> Lakebase -> Genie -> App
 #
 #   databricks bundle validate
 #   databricks bundle deploy -t dev
-#   databricks bundle run plenitude_febar_pipeline -t dev   # then the churn job, app, etc.
+#   databricks bundle run save_desk_nightly -t dev
 bundle:
-  name: plenitude-febar-voice-to-retention
+  name: streamline-telco-save-desk
 
 variables:
   catalog:
-    description: Unity Catalog to build into
-    default: plenitude_febar
+    default: streamline_telco
   warehouse_id:
-    description: SQL warehouse id for the dashboard + Genie space
-    default: "c8d3657be7ec0f0f"   # plenitude-febar-wh on e2-demo-field-eng
+    description: Serverless SQL warehouse for SQL tasks and Genie
 
 targets:
   dev:
     mode: development
     default: true
-    workspace:
-      host: https://e2-demo-field-eng.cloud.databricks.com
 
 resources:
-  # --- Lakeflow Declarative Pipeline (ingest -> silver) ---
   pipelines:
-    plenitude_febar_pipeline:
-      name: plenitude-febar-ingest
+    save_desk_ingest:
+      name: save-desk-ingest
       catalog: ${var.catalog}
       schema: silver
       serverless: true
       libraries:
-        - notebook:
-            path: ./notebooks/01_ingest_lakeflow.py
+        - notebook: {path: ./notebooks/01_ingest_lakeflow.py}
 
-  # --- Orchestration job: UC setup -> genai enrich -> model -> lakebase -> genie ---
   jobs:
-    plenitude_febar_build:
-      name: plenitude-febar-build
+    save_desk_nightly:
+      name: save-desk-nightly
+      schedule: {quartz_cron_expression: "0 0 2 * * ?", timezone_id: "Europe/Rome"}
       tasks:
-        - task_key: unity_catalog
-          sql_task:
-            warehouse_id: ${var.warehouse_id}
-            file:
-              path: ./notebooks/00_setup_unity_catalog.sql
         - task_key: ingest
-          depends_on: [{task_key: unity_catalog}]
-          pipeline_task:
-            pipeline_id: ${resources.pipelines.plenitude_febar_pipeline.id}
+          pipeline_task: {pipeline_id: "${resources.pipelines.save_desk_ingest.id}"}
         - task_key: genai_enrichment
           depends_on: [{task_key: ingest}]
-          notebook_task: {notebook_path: ./notebooks/02_genai_enrichment.py}
+          sql_task: {warehouse_id: "${var.warehouse_id}", file: {path: ./notebooks/02_genai_enrichment.sql}}
+        - task_key: governance
+          depends_on: [{task_key: genai_enrichment}]
+          sql_task: {warehouse_id: "${var.warehouse_id}", file: {path: ./notebooks/00_setup_unity_catalog.sql}}
         - task_key: churn_model
           depends_on: [{task_key: genai_enrichment}]
           notebook_task: {notebook_path: ./notebooks/03_churn_model.py}
-        - task_key: lakebase_serving
+        - task_key: lakebase_sync
           depends_on: [{task_key: churn_model}]
           notebook_task: {notebook_path: ./notebooks/04_lakebase_serving.py}
-        - task_key: genie_room
-          depends_on: [{task_key: churn_model}]
-          notebook_task: {notebook_path: ./notebooks/05_genie_room.py}
 
-  # --- Lakebase (managed Postgres) for operational serving ---
   database_instances:
-    plenitude_febar:
-      name: plenitude-febar
+    save_desk_db:
+      name: streamline-save-desk
       capacity: CU_1
 
-  # --- AI/BI dashboard ---
-  dashboards:
-    plenitude_febar_dashboard:
-      display_name: Plenitude — Voice-to-Retention
-      file_path: ./dashboard/churn_dashboard.lvdash.json
-      warehouse_id: ${var.warehouse_id}
-
-  # --- Databricks App (retention cockpit) ---
   apps:
-    plenitude_retention:
-      name: plenitude-retention
-      description: Voice-to-Retention cockpit for the retention team
+    save_desk:
+      name: save-desk
+      description: Retention cockpit — who to call, why, and what to offer
       source_code_path: ./app
       resources:
         - name: lakebase
           database:
-            instance_name: plenitude-febar
+            instance_name: streamline-save-desk
+            database_name: databricks_postgres
             permission: CAN_CONNECT_AND_CREATE

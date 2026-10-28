@@ -1,6 +1,5 @@
 streamlit>=1.38
 pandas>=2.2
 pyarrow>=16
-psycopg2-binary>=2.9
-databricks-sql-connector>=3.0
-databricks-sdk>=0.30
+psycopg[binary]>=3.1
+databricks-sdk>=0.40

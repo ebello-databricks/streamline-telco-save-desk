@@ -3,73 +3,56 @@
 # MAGIC # 04 · Lakebase — operational serving
 # MAGIC **FE Bar stage: Lakebase (operational serving).**
 # MAGIC
-# MAGIC The retention cockpit app needs **low-latency, transactional** reads of the churn
-# MAGIC scores plus a place to write back the retention team's actions (who was called,
-# MAGIC outcome). We publish `gold.churn_scores` into a **Lakebase** (managed Postgres)
-# MAGIC instance and add an `actions` table the app writes to — the operational serving
-# MAGIC layer, separate from the analytical lakehouse.
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### 1. Create the Lakebase instance (one-time, or via `databricks.yml`)
-# MAGIC ```bash
-# MAGIC databricks database create-database-instance plenitude-febar \
-# MAGIC   --capacity CU_1
-# MAGIC ```
-# MAGIC Then create a **synced table** so `gold.churn_scores` is continuously mirrored
-# MAGIC into Postgres (Lakebase reverse-ETL), and a companion `retention_actions` table.
+# MAGIC The Save Desk app is an **operational** workload: an agent opens a subscriber
+# MAGIC (point lookup, milliseconds) and records the outcome (transactional insert).
+# MAGIC `gold.save_list` is mirrored into **Lakebase** (managed Postgres) with a **synced table**,
+# MAGIC and a `save_actions` table receives the agents' write-back. Outcomes flow back to the
+# MAGIC lakehouse to retrain the model on what actually saved customers.
 
 # COMMAND ----------
 
 from databricks.sdk import WorkspaceClient
 w = WorkspaceClient()
+INSTANCE = "streamline-save-desk"     # created by databricks.yml (database_instances)
 
-INSTANCE = "plenitude-febar"
-# Synced table: UC gold -> Lakebase Postgres, kept fresh (snapshot/continuous)
 w.database.create_synced_database_table(
-    name="plenitude_febar.gold.churn_scores_synced",
+    name="streamline_telco.gold.save_list_synced",
     spec={
-        "source_table_full_name": "plenitude_febar.gold.churn_scores",
-        "primary_key_columns": ["customer_id"],
-        "scheduling_policy": "SNAPSHOT",
+        "source_table_full_name": "streamline_telco.gold.save_list",
+        "primary_key_columns": ["subscriber_id"],
+        "scheduling_policy": "TRIGGERED",          # refreshed after each nightly scoring run
         "database_instance_name": INSTANCE,
     },
 )
-print("synced table requested — Lakebase now serves churn_scores over Postgres")
+print("synced table requested: gold.save_list -> Lakebase")
+
+# COMMAND ----------
+
+import uuid, psycopg
+inst = w.database.get_database_instance(INSTANCE)
+cred = w.database.generate_database_credential(request_id=str(uuid.uuid4()), instance_names=[INSTANCE])
+me = w.current_user.me().user_name
+
+with psycopg.connect(host=inst.read_write_dns, dbname="databricks_postgres", user=me,
+                     password=cred.token, sslmode="require") as conn:
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS save_actions (
+        action_id     BIGSERIAL PRIMARY KEY,
+        subscriber_id TEXT NOT NULL,
+        agent_id      TEXT,
+        offer         TEXT,
+        outcome       TEXT CHECK (outcome IN ('accepted','declined','callback','no_answer')),
+        notes         TEXT,
+        created_at    TIMESTAMPTZ DEFAULT now())""")
+    row = conn.execute("SELECT subscriber_id, churn_probability, next_best_offer "
+                       "FROM save_list_synced ORDER BY value_at_risk_eur DESC LIMIT 1").fetchone()
+    conn.execute("INSERT INTO save_actions(subscriber_id, agent_id, offer, outcome) VALUES (%s,%s,%s,'accepted')",
+                 (row[0], "AG017", row[2]))
+    print(row, conn.execute("SELECT count(*) FROM save_actions").fetchone())
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 2. Write-back table for retention actions (app -> Lakebase)
-# MAGIC The app records each retention interaction. Because Lakebase is real Postgres,
-# MAGIC this is a normal transactional insert with immediate read-after-write.
-
-# COMMAND ----------
-
-import psycopg2, os
-# Connection details come from the Lakebase instance + a workspace OAuth token.
-conn = psycopg2.connect(
-    host=os.environ["PGHOST"], dbname="databricks_postgres",
-    user=os.environ["PGUSER"], password=os.environ["PGPASSWORD"], sslmode="require")
-cur = conn.cursor()
-cur.execute("""
-CREATE TABLE IF NOT EXISTS retention_actions (
-    action_id     BIGSERIAL PRIMARY KEY,
-    customer_id   TEXT NOT NULL,
-    agent         TEXT,
-    action        TEXT,               -- e.g. 'offer_made','callback','saved','lost'
-    offer_eur     NUMERIC,
-    notes         TEXT,
-    created_at    TIMESTAMPTZ DEFAULT now()
-);
-""")
-conn.commit()
-print("retention_actions ready in Lakebase")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC The app (`app/app.py`) reads `churn_scores_synced` for the ranked call list and
-# MAGIC inserts into `retention_actions` when an agent logs an outcome — closing the loop
-# MAGIC from analytical scores to operational action.
+# MAGIC Local mirror (SQLite stand-in, same schema): `evidence/model_run_output.txt` step `[6 serve]`
+# MAGIC — 20,000 rows loaded, 500 point lookups, one agent write-back row.
+# MAGIC `save_actions` is registered back into UC (Lakebase catalog) for the outcome-feedback loop.

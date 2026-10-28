@@ -1,29 +1,23 @@
 """
-FE Bar build — Plenitude "Voice-to-Retention" | Local pipeline runner
-=====================================================================
-Runs the SAME logic the Databricks notebooks run in the workspace, but
-locally, so the repo can commit REAL execution evidence (readable as
-text) as required by the FE Bar:
+FE Bar build — Streamline Telco "Save Desk" | Local pipeline runner
+====================================================================
+Runs the SAME logic as the Databricks notebooks, locally, so the repo
+commits REAL execution evidence (readable as text):
 
-  1. SILVER  — clean + conform the raw landing tables
-  2. GENAI   — enrich call transcripts with sentiment + intent + churn
-               signal. In the workspace this is `ai_analyze_sentiment()` /
-               `ai_classify()` (Foundation Model API). Locally we use a
-               deterministic lexicon so the evidence is reproducible.
-  3. FEATURES— build the customer-level feature table (GOLD)
-  4. MODEL   — train + evaluate the churn model, score every customer
-  5. WRITE   — churn_scores GOLD table + evidence files
-
-Outputs (committed to the repo):
-  data/output/gold_customer_features.parquet
-  data/output/gold_churn_scores.parquet  (+ _sample.csv)
-  data/output/call_enrichment.parquet    (+ _sample.csv)
-  evidence/model_metrics.json
-  evidence/model_run_output.txt
-  evidence/query_results.md
+  1. SILVER   — clean + conform the raw landing tables (Lakeflow expectations)
+  2. GEN AI   — enrich care-call transcripts: sentiment, intent, switch intent.
+                Workspace = ai_analyze_sentiment / ai_classify / ai_query.
+                Locally = deterministic lexicon mirror (reproducible evidence).
+  3. FEATURES — subscriber-level feature table (GOLD)
+  4. ML       — train + evaluate churn model, score every subscriber
+  5. ACTION   — next-best-offer + agent talk track per at-risk subscriber
+  6. SERVE    — load save list into an OLTP store + write back an agent outcome
+                (workspace = Lakebase Postgres; locally = SQLite stand-in)
+  7. GENIE    — the business questions the Genie agent answers, run as SQL
+  8. APP      — export the demo app dataset (app/demo_data.js)
 """
 from __future__ import annotations
-import json, io, datetime as dt
+import json, io, sqlite3, time, datetime as dt
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -35,7 +29,7 @@ from sklearn.metrics import (roc_auc_score, average_precision_score,
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "output"
 EV = ROOT / "evidence"; EV.mkdir(exist_ok=True)
-REF_DATE = dt.date(2026, 6, 30)
+REF_DATE = dt.date(2026, 9, 30)
 _log = io.StringIO()
 
 
@@ -44,218 +38,318 @@ def log(m=""):
 
 
 # ---------------------------------------------------------------------------
-# 2. GEN AI ENRICHMENT — local, deterministic mirror of ai_analyze_sentiment
-#    / ai_classify. Workspace notebook uses Foundation Model API instead.
+# 1. SILVER — same contracts as the Lakeflow expectations in 01_ingest_lakeflow.py
 # ---------------------------------------------------------------------------
-NEG = ["arrabbiato", "assurdo", "sbagliata", "pessimo", "stanco", "disserviz",
-       "troppo alto", "senza corrente", "non va bene", "reclamo"]
-CHURN = ["cambio fornitore", "disdi", "concorrenza", "altro operatore", "enel",
-         "passo alla", "non è più competitiv", "trovato di meglio"]
-INTENTS = ["billing", "retention", "technical", "commercial", "self_service"]
+def to_silver(subs, contr, usage, calls):
+    before = dict(subscribers=len(subs), contracts=len(contr), usage=len(usage), care_calls=len(calls))
+    subs = subs.dropna(subset=["subscriber_id"]).drop_duplicates("subscriber_id")
+    contr = contr[contr.monthly_price_eur > 0]
+    usage = usage[(usage.bill_amount_eur > 0) & (usage.bill_amount_eur < 1000) & (usage.dropped_calls >= 0)]
+    calls = calls[calls.transcript.str.len() > 0]
+    after = dict(subscribers=len(subs), contracts=len(contr), usage=len(usage), care_calls=len(calls))
+    return subs, contr, usage, calls, before, after
+
+
+# ---------------------------------------------------------------------------
+# 2. GEN AI ENRICHMENT — local mirror of ai_analyze_sentiment / ai_classify / ai_query
+# ---------------------------------------------------------------------------
+NEG = ["ridiculous", "annoyed", "unacceptable", "terrible", "disappointed", "cannot keep",
+       "nothing changes", "so slow", "goes down", "faulty", "i am leaving", "not competitive"]
+POS = ["very happy", "very satisfied", "really helpful"]
+SWITCH = ["other operator", "porting", "pac code", "switching provider", "other providers",
+          "better deal", "i am leaving", "cancel"]
+INTENT_KW = {"network": ["signal", "data", "fibre", "drop", "outage"],
+             "billing": ["bill", "invoice", "charge", "debit", "roaming"],
+             "retention": ["contract ends", "renew", "cancel", "porting", "pac code", "switch"],
+             "device": ["phone", "handset", "esim", "repair"]}
 
 
 def enrich_calls(calls: pd.DataFrame) -> pd.DataFrame:
     def score(t):
         tl = t.lower()
-        neg = sum(w in tl for w in NEG)
-        pos = ("soddisfatto" in tl) or ("gentiliss" in tl) or ("benissimo" in tl)
-        churn = int(any(w in tl for w in CHURN))
-        if neg >= 1 and not pos:
-            sent, sc = "negative", round(-0.55 - 0.1 * neg, 2)
-        elif pos:
-            sent, sc = "positive", 0.7
-        else:
-            sent, sc = "neutral", 0.05
-        return pd.Series({"sentiment": sent, "sentiment_score": sc,
-                          "churn_signal": churn})
+        n = sum(w in tl for w in NEG); pos = any(w in tl for w in POS)
+        sent, sc = ("negative", round(-0.5 - 0.1 * n, 2)) if n and not pos else \
+                   ("positive", 0.7) if pos else ("neutral", 0.05)
+        intent = next((k for k in ["retention", "network", "billing", "device"]
+                       if any(w in tl for w in INTENT_KW[k])), "general")
+        return pd.Series({"sentiment": sent, "sentiment_score": sc, "intent": intent,
+                          "switch_intent": int(any(w in tl for w in SWITCH))})
     enr = calls.join(calls.transcript.apply(score))
-    # intent already carried in `queue` (what ai_classify would recover)
-    enr["intent"] = enr["queue"]
-    enr["complaint_flag"] = (enr.sentiment == "negative").astype(int)
-    return enr[["call_id", "customer_id", "call_ts", "intent", "sentiment",
-                "sentiment_score", "churn_signal", "complaint_flag", "duration_sec"]]
+    acc = (enr.intent == enr.queue).mean()
+    return enr[["call_id", "subscriber_id", "call_ts", "intent", "sentiment",
+                "sentiment_score", "switch_intent", "duration_sec", "transcript"]], acc
 
 
 # ---------------------------------------------------------------------------
 # 3. FEATURE TABLE (GOLD)
 # ---------------------------------------------------------------------------
-def build_features(cust, cons, contr, enr) -> pd.DataFrame:
-    cons = cons.sort_values(["customer_id", "month"])
-    g = cons.groupby("customer_id").bill_amount_eur
-    last3 = g.apply(lambda s: s.tail(3).mean())
-    prev3 = g.apply(lambda s: s.iloc[-6:-3].mean() if len(s) >= 6 else s.head(3).mean())
-    bill_trend = ((last3 - prev3) / prev3.clip(lower=1)).rename("bill_trend_pct")
-    avg_bill = g.mean().rename("avg_bill_eur")
-
-    call = enr.groupby("customer_id").agg(
-        n_calls_90d=("call_id", "count"),
-        n_negative_calls=("complaint_flag", "sum"),
-        n_retention_calls=("intent", lambda s: int((s == "retention").sum())),
+def build_features(subs, contr, usage, enr) -> pd.DataFrame:
+    u = usage.sort_values(["subscriber_id", "month"])
+    last2 = u.groupby("subscriber_id").tail(2).groupby("subscriber_id")
+    first4 = u.groupby("subscriber_id").head(4).groupby("subscriber_id")
+    net = pd.DataFrame({
+        "dropped_calls_l2m": last2.dropped_calls.mean(),
+        "dl_speed_l2m": last2.avg_dl_speed_mbps.mean(),
+        "bill_trend_pct": (last2.bill_amount_eur.mean() - first4.bill_amount_eur.mean()) / first4.bill_amount_eur.mean(),
+        "avg_bill_eur": u.groupby("subscriber_id").bill_amount_eur.mean(),
+    })
+    call = enr.groupby("subscriber_id").agg(
+        n_calls_60d=("call_id", "count"),
+        n_negative_calls=("sentiment", lambda s: int((s == "negative").sum())),
+        n_network_calls=("intent", lambda s: int((s == "network").sum())),
         n_billing_calls=("intent", lambda s: int((s == "billing").sum())),
+        n_retention_calls=("intent", lambda s: int((s == "retention").sum())),
         avg_sentiment=("sentiment_score", "mean"),
-        churn_mentions=("churn_signal", "max"),
+        switch_intent=("switch_intent", "max"),
     )
-    f = cust.set_index("customer_id").join([bill_trend, avg_bill, call])
-    f[["n_calls_90d", "n_negative_calls", "n_retention_calls", "n_billing_calls",
-       "churn_mentions"]] = f[["n_calls_90d", "n_negative_calls", "n_retention_calls",
-                               "n_billing_calls", "churn_mentions"]].fillna(0)
+    f = (subs.set_index("subscriber_id")
+         .join(contr.set_index("subscriber_id")[["monthly_price_eur", "handset_financed", "commitment_end_date"]])
+         .join(net).join(call))
+    cc = ["n_calls_60d", "n_negative_calls", "n_network_calls", "n_billing_calls", "n_retention_calls", "switch_intent"]
+    f[cc] = f[cc].fillna(0).astype(int)
     f["avg_sentiment"] = f["avg_sentiment"].fillna(0.05)
-    f["bill_trend_pct"] = f["bill_trend_pct"].fillna(0)
-    end = pd.to_datetime(f["contract_end_date"]).dt.date
-    f["days_to_contract_end"] = end.apply(lambda d: (d - REF_DATE).days)
-    f["contract_ending_soon"] = (f["days_to_contract_end"] < 90).astype(int)
+    f["days_to_commitment_end"] = pd.to_datetime(f.commitment_end_date).dt.date.apply(lambda d: (d - REF_DATE).days)
+    f["out_of_contract"] = (f.days_to_commitment_end < 0).astype(int)
+    f["commitment_ends_60d"] = f.days_to_commitment_end.between(0, 59).astype(int)
+    f["from_comparison_site"] = (f.acquisition_channel == "comparison_site").astype(int)
+    f["pays_by_card"] = (f.payment_method == "card").astype(int)
+    f["multi_line"] = (f.lines > 1).astype(int)
     return f.reset_index()
 
 
-FEATURES = ["tenure_months", "monthly_bill_eur", "avg_bill_eur", "bill_trend_pct",
-            "ebilling", "days_to_contract_end", "contract_ending_soon",
-            "n_calls_90d", "n_negative_calls", "n_retention_calls", "n_billing_calls",
-            "avg_sentiment", "churn_mentions",
-            "is_variable", "pay_risky", "channel_comparator", "is_dual"]
+FEATURES = ["tenure_months", "lines", "monthly_price_eur", "handset_financed", "avg_bill_eur",
+            "bill_trend_pct", "dropped_calls_l2m", "dl_speed_l2m", "days_to_commitment_end",
+            "out_of_contract", "commitment_ends_60d", "from_comparison_site", "pays_by_card",
+            "multi_line", "n_calls_60d", "n_negative_calls", "n_network_calls",
+            "n_billing_calls", "n_retention_calls", "avg_sentiment", "switch_intent"]
 
 
-def encode(f: pd.DataFrame) -> pd.DataFrame:
-    f = f.copy()
-    f["is_variable"] = (f.contract_type == "variable").astype(int)
-    f["pay_risky"] = f.payment_method.isin(["postal", "card"]).astype(int)
-    f["channel_comparator"] = (f.signup_channel == "comparator").astype(int)
-    f["is_dual"] = (f["product"] == "dual").astype(int)
-    return f
+# ---------------------------------------------------------------------------
+# 5. NEXT-BEST-OFFER + TALK TRACK (workspace: ai_query writes the talk track)
+# ---------------------------------------------------------------------------
+OFFERS = {
+    "network":  ("Network fix + 1 month credit", 15.0),
+    "price":    ("Loyalty price match (-20% for 12 months)", 60.0),
+    "contract": ("Early renewal with handset upgrade", 45.0),
+    "service":  ("Priority care callback + bill credit", 10.0),
+}
+
+
+def primary_driver(r):
+    hard_net = r.dropped_calls_l2m > 3.5 or r.dl_speed_l2m < 15
+    hard_price = r.bill_trend_pct > 0.15
+    if hard_price and (not hard_net or r.bill_trend_pct > 0.35): return "price"
+    if hard_net: return "network"
+    if r.commitment_ends_60d or r.out_of_contract or r.n_retention_calls > 0: return "contract"
+    if r.n_network_calls > 0: return "network"
+    if r.n_billing_calls > 0: return "price"
+    return "service"
+
+
+def reasons(r):
+    out = []
+    if r.switch_intent: out.append("mentioned switching / porting on a care call")
+    if r.dropped_calls_l2m > 3.5: out.append(f"{r.dropped_calls_l2m:.0f} dropped calls / month")
+    if r.dl_speed_l2m < 15: out.append(f"data speed down to {r.dl_speed_l2m:.0f} Mbps")
+    if r.bill_trend_pct > 0.15: out.append(f"bill up {r.bill_trend_pct*100:.0f}%")
+    if r.commitment_ends_60d: out.append(f"commitment ends in {r.days_to_commitment_end} days")
+    if r.out_of_contract: out.append("out of contract")
+    if r.n_network_calls and not (r.dropped_calls_l2m > 3.5 or r.dl_speed_l2m < 15):
+        out.append(f"{r.n_network_calls} care call(s) about network quality")
+    if r.n_retention_calls: out.append(f"{r.n_retention_calls} call(s) to the retention line")
+    if r.n_negative_calls: out.append(f"{r.n_negative_calls} negative care call(s)")
+    if r.tenure_months < 12: out.append(f"only {r.tenure_months} months with us")
+    if r.from_comparison_site: out.append("joined via a price-comparison site")
+    if r.pays_by_card: out.append("pays by card, not direct debit")
+    return out[:3] or ["several weaker signals combined: review before calling"]
+
+
+def talk_track(r, offer):
+    lead = {"network": "I can see you have had connection problems recently, and I am sorry about that.",
+            "price": "I noticed your last bills were higher than usual, so I wanted to review your plan with you.",
+            "contract": "Your commitment period is ending soon, and as a loyal customer I have a renewal offer for you.",
+            "service": "I wanted to check you are getting the most from your Streamline plan."}[r.driver]
+    close = {"network": "Confirm the engineer visit date and book a follow-up call in 7 days.",
+             "price": "Confirm the new monthly price in writing before ending the call.",
+             "contract": "Send the renewal summary by SMS while on the call.",
+             "service": "Book a follow-up call in 7 days."}[r.driver]
+    return f"{lead} I would like to offer you: {offer.lower()}. {close}"
 
 
 def main():
-    log("=" * 70)
-    log("PLENITUDE VOICE-TO-RETENTION  —  local pipeline run")
+    t0 = time.time()
+    log("=" * 72)
+    log("STREAMLINE TELCO SAVE DESK  —  local pipeline run (synthetic data)")
     log(f"run_ts={dt.datetime.now().isoformat(timespec='seconds')}  ref_date={REF_DATE}")
-    log("=" * 70)
+    log("=" * 72)
 
-    cust = pd.read_parquet(OUT / "customers.parquet")
-    cons = pd.read_parquet(OUT / "consumption.parquet")
+    subs = pd.read_parquet(OUT / "subscribers.parquet")
     contr = pd.read_parquet(OUT / "contracts.parquet")
-    calls = pd.read_parquet(OUT / "calls.parquet")
+    usage = pd.read_parquet(OUT / "usage.parquet")
+    calls = pd.read_parquet(OUT / "care_calls.parquet")
     churn = pd.read_parquet(OUT / "churn_labels.parquet")
-    log(f"\n[silver] loaded raw: customers={len(cust):,}  consumption={len(cons):,}  "
-        f"contracts={len(contr):,}  calls={len(calls):,}")
 
-    # 2. enrichment
-    enr = enrich_calls(calls)
-    enr.to_parquet(OUT / "call_enrichment.parquet", index=False)
+    subs, contr, usage, calls, before, after = to_silver(subs, contr, usage, calls)
+    log("\n[1 silver ] expectations applied (rows before -> after):")
+    for k in before: log(f"            {k:<12} {before[k]:>8,} -> {after[k]:>8,}")
+
+    enr, intent_acc = enrich_calls(calls)
+    enr.drop(columns="transcript").to_parquet(OUT / "call_enrichment.parquet", index=False)
     enr.head(50).to_csv(OUT / "call_enrichment_sample.csv", index=False)
-    sdist = enr.sentiment.value_counts(normalize=True).round(3).to_dict()
-    log(f"[genai ] enriched {len(enr):,} calls  sentiment_mix={sdist}  "
-        f"churn_signal_calls={int(enr.churn_signal.sum()):,}")
+    log(f"\n[2 gen ai ] enriched {len(enr):,} care calls")
+    log(f"            sentiment mix   = {enr.sentiment.value_counts(normalize=True).round(3).to_dict()}")
+    log(f"            intent mix      = {enr.intent.value_counts().to_dict()}")
+    log(f"            switch-intent calls = {int(enr.switch_intent.sum()):,}")
+    log(f"            intent agreement vs. IVR queue label = {intent_acc:.1%}")
 
-    # 3. features
-    feats = build_features(cust, cons, contr, enr)
-    feats = feats.merge(churn[["customer_id", "churned_next_90d"]], on="customer_id")
-    feats = encode(feats)
-    feats.to_parquet(OUT / "gold_customer_features.parquet", index=False)
-    log(f"[gold  ] feature table: {len(feats):,} customers x {len(FEATURES)} features")
+    feats = build_features(subs, contr, usage, enr).merge(
+        churn[["subscriber_id", "churned_next_60d"]], on="subscriber_id")
+    feats.to_parquet(OUT / "gold_subscriber_features.parquet", index=False)
+    log(f"\n[3 gold   ] feature table: {len(feats):,} subscribers x {len(FEATURES)} features")
 
-    # 4. model
-    X, y = feats[FEATURES], feats["churned_next_90d"]
+    X, y = feats[FEATURES], feats["churned_next_60d"]
     Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.25, random_state=7, stratify=y)
-    clf = GradientBoostingClassifier(n_estimators=220, max_depth=3,
-                                     learning_rate=0.06, subsample=0.9, random_state=7)
-    clf.fit(Xtr, ytr)
-    p_te = clf.predict_proba(Xte)[:, 1]
-    auc = roc_auc_score(yte, p_te)
-    ap = average_precision_score(yte, p_te)
-
-    # precision/recall @ top-decile (the retention team's call list)
-    k = int(len(p_te) * 0.10)
-    idx = np.argsort(-p_te)[:k]
-    topk_precision = yte.iloc[idx].mean()
-    base_rate = yte.mean()
-    lift = topk_precision / base_rate
-
-    # operating point at 0.5
-    yhat = (p_te >= 0.5).astype(int)
+    clf = GradientBoostingClassifier(n_estimators=250, max_depth=3, learning_rate=0.06,
+                                     subsample=0.9, random_state=7).fit(Xtr, ytr)
+    p = clf.predict_proba(Xte)[:, 1]
+    auc, ap = roc_auc_score(yte, p), average_precision_score(yte, p)
+    k = int(len(p) * 0.10); idx = np.argsort(-p)[:k]
+    top_prec, base = yte.iloc[idx].mean(), yte.mean()
+    top_recall = yte.iloc[idx].sum() / yte.sum()
+    yhat = (p >= 0.5).astype(int)
     pr, rc, f1, _ = precision_recall_fscore_support(yte, yhat, average="binary", zero_division=0)
     cm = confusion_matrix(yte, yhat).tolist()
 
-    log("\n[model ] GradientBoosting  (test set n={:,})".format(len(yte)))
-    log(f"         ROC-AUC            = {auc:.3f}")
-    log(f"         PR-AUC (avg prec)  = {ap:.3f}")
-    log(f"         base churn rate    = {base_rate:.3f}")
-    log(f"         precision @ top10% = {topk_precision:.3f}   (lift {lift:.2f}x over base)")
-    log(f"         precision @0.5     = {pr:.3f}   recall = {rc:.3f}   f1 = {f1:.3f}")
-    log(f"         confusion matrix   = {cm}   [[TN,FP],[FN,TP]]")
+    # Ablation: same model WITHOUT the Gen AI call features -> value of the voice signal
+    voice = ["n_calls_60d", "n_negative_calls", "n_network_calls", "n_billing_calls",
+             "n_retention_calls", "avg_sentiment", "switch_intent"]
+    nv = [c for c in FEATURES if c not in voice]
+    clf_nv = GradientBoostingClassifier(n_estimators=250, max_depth=3, learning_rate=0.06,
+                                        subsample=0.9, random_state=7).fit(Xtr[nv], ytr)
+    p_nv = clf_nv.predict_proba(Xte[nv])[:, 1]
+    auc_nv = roc_auc_score(yte, p_nv)
+    top_prec_nv = yte.iloc[np.argsort(-p_nv)[:k]].mean()
 
+    log(f"\n[4 ml     ] GradientBoostingClassifier  (train n={len(ytr):,}, test n={len(yte):,})")
+    log(f"            ROC-AUC              = {auc:.3f}")
+    log(f"            PR-AUC               = {ap:.3f}")
+    log(f"            base churn rate      = {base:.3f}")
+    log(f"            precision @ top 10%  = {top_prec:.3f}   (lift {top_prec/base:.2f}x)")
+    log(f"            recall    @ top 10%  = {top_recall:.3f}   (share of all churners caught)")
+    log(f"            precision/recall@0.5 = {pr:.3f} / {rc:.3f}   f1 = {f1:.3f}")
+    log(f"            confusion matrix     = {cm}   [[TN,FP],[FN,TP]]")
+    log(f"            ablation WITHOUT Gen AI call features: ROC-AUC {auc_nv:.3f}, "
+        f"precision@top10% {top_prec_nv:.3f}  -> Gen AI adds +{(auc-auc_nv):.3f} AUC")
     imp = sorted(zip(FEATURES, clf.feature_importances_), key=lambda x: -x[1])
-    log("\n[model ] top feature importances:")
-    for name, v in imp[:8]:
-        log(f"         {name:<22} {v:6.3f}  " + "#" * int(v * 80))
+    log("            top feature importances:")
+    for n_, v in imp[:8]:
+        log(f"              {n_:<24} {v:6.3f}  " + "#" * int(v * 80))
 
-    # 5. score everyone -> GOLD churn_scores
+    # score everyone
     feats["churn_probability"] = clf.predict_proba(X)[:, 1].round(4)
-    bands = pd.cut(feats.churn_probability, [-0.01, 0.25, 0.5, 0.75, 1.01],
-                   labels=["Low", "Medium", "High", "Critical"])
-    feats["risk_band"] = bands.astype(str)
+    feats["risk_band"] = pd.cut(feats.churn_probability, [-0.01, 0.2, 0.4, 0.6, 1.01],
+                                labels=["Low", "Medium", "High", "Critical"]).astype(str)
+    feats["driver"] = feats.apply(primary_driver, axis=1)
+    feats["next_best_offer"] = feats.driver.map(lambda d: OFFERS[d][0])
+    feats["offer_cost_eur"] = feats.driver.map(lambda d: OFFERS[d][1])
+    feats["annual_value_eur"] = (feats.avg_bill_eur * 12).round(0)
+    feats["value_at_risk_eur"] = (feats.annual_value_eur * feats.churn_probability).round(0)
+    feats["top_reasons"] = feats.apply(lambda r: "; ".join(reasons(r)), axis=1)
+    feats["talk_track"] = feats.apply(lambda r: talk_track(r, r.next_best_offer), axis=1)
 
-    def reasons(r):
-        out = []
-        if r.n_retention_calls > 0: out.append("called retention line")
-        if r.churn_mentions > 0: out.append("mentioned switching/competitor")
-        if r.bill_trend_pct > 0.10: out.append(f"bill up {r.bill_trend_pct*100:.0f}%")
-        if r.n_negative_calls > 0: out.append(f"{int(r.n_negative_calls)} negative call(s)")
-        if r.contract_ending_soon: out.append("contract ends <90d")
-        if r.is_variable: out.append("variable tariff")
-        return "; ".join(out[:3]) or "stable profile"
-    feats["top_reasons"] = feats.apply(reasons, axis=1)
+    cols = ["subscriber_id", "region", "segment", "plan", "lines", "tenure_months", "avg_bill_eur",
+            "annual_value_eur", "churn_probability", "risk_band", "value_at_risk_eur", "driver",
+            "top_reasons", "next_best_offer", "offer_cost_eur", "talk_track",
+            "dropped_calls_l2m", "dl_speed_l2m", "bill_trend_pct", "days_to_commitment_end", "switch_intent"]
+    scores = feats[cols].sort_values("value_at_risk_eur", ascending=False)
+    scores.to_parquet(OUT / "gold_save_list.parquet", index=False)
+    scores.head(50).to_csv(OUT / "gold_save_list_sample.csv", index=False)
+    bands = feats.risk_band.value_counts().reindex(["Critical", "High", "Medium", "Low"]).fillna(0).astype(int)
+    log("\n[5 action ] save list scored + next-best-offer assigned:")
+    for b, n_ in bands.items(): log(f"            {b:<9} {n_:>6,}  ({n_/len(feats)*100:4.1f}%)")
+    log(f"            driver mix (High+Critical) = "
+        f"{feats[feats.risk_band.isin(['High','Critical'])].driver.value_counts().to_dict()}")
 
-    scores = feats[["customer_id", "region", "segment", "product", "monthly_bill_eur",
-                    "churn_probability", "risk_band", "top_reasons",
-                    "n_negative_calls", "n_retention_calls", "churn_mentions"]]
-    scores = scores.sort_values("churn_probability", ascending=False)
-    scores.to_parquet(OUT / "gold_churn_scores.parquet", index=False)
-    scores.head(50).to_csv(OUT / "gold_churn_scores_sample.csv", index=False)
+    # 6. SERVE — OLTP stand-in for Lakebase: point lookup + agent write-back
+    db = OUT / "lakebase_standin.sqlite"; db.unlink(missing_ok=True)
+    con = sqlite3.connect(db)
+    scores.to_sql("save_list", con, index=False)
+    con.execute("CREATE UNIQUE INDEX ix_sub ON save_list(subscriber_id)")
+    con.execute("""CREATE TABLE save_actions(action_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   subscriber_id TEXT, agent_id TEXT, offer TEXT, outcome TEXT, ts TEXT)""")
+    top = scores.iloc[0]
+    t = time.perf_counter()
+    for sid in scores.subscriber_id.sample(500, random_state=1):
+        con.execute("SELECT churn_probability, next_best_offer FROM save_list WHERE subscriber_id=?", (sid,)).fetchone()
+    lat_ms = (time.perf_counter() - t) / 500 * 1000
+    con.execute("INSERT INTO save_actions(subscriber_id,agent_id,offer,outcome,ts) VALUES (?,?,?,?,?)",
+                (top.subscriber_id, "AG017", top.next_best_offer, "accepted", dt.datetime.now().isoformat(timespec="seconds")))
+    con.commit()
+    wb = con.execute("SELECT * FROM save_actions").fetchall()
+    log(f"\n[6 serve  ] OLTP serving (SQLite stand-in for Lakebase Postgres): {len(scores):,} rows loaded")
+    log(f"            500 point lookups by subscriber_id: avg {lat_ms:.3f} ms")
+    log(f"            agent write-back -> save_actions: {wb}")
+    con.close(); db.unlink()
 
-    band_ct = feats.risk_band.value_counts().reindex(["Critical", "High", "Medium", "Low"])
-    log("\n[gold  ] churn_scores risk bands:")
-    for b, n in band_ct.items():
-        log(f"         {b:<9} {int(n):>6,}  ({n/len(feats)*100:4.1f}%)")
+    # 7. GENIE — business questions answered as SQL over gold
+    hc = feats[feats.risk_band.isin(["High", "Critical"])]
+    genie = [
+        ("How many subscribers are High or Critical risk, and how much annual revenue do they represent?",
+         "SELECT risk_band, COUNT(*) subs, SUM(annual_value_eur) revenue FROM gold.save_list WHERE risk_band IN ('High','Critical') GROUP BY risk_band",
+         hc.groupby("risk_band").agg(subs=("subscriber_id", "count"), revenue_eur=("annual_value_eur", "sum")).to_string()),
+        ("Which region has the most at-risk subscribers because of network problems?",
+         "SELECT region, COUNT(*) FROM gold.save_list WHERE risk_band IN ('High','Critical') AND driver='network' GROUP BY region ORDER BY 2 DESC",
+         hc[hc.driver == "network"].region.value_counts().rename("at_risk_network").to_frame().to_string()),
+        ("Show the 10 subscribers with the highest value at risk and what we should offer them.",
+         "SELECT subscriber_id, plan, churn_probability, value_at_risk_eur, next_best_offer FROM gold.save_list ORDER BY value_at_risk_eur DESC LIMIT 10",
+         scores.head(10)[["subscriber_id", "plan", "churn_probability", "value_at_risk_eur", "next_best_offer"]].to_string(index=False)),
+        ("What is the actual churn rate for customers who mentioned switching on a care call vs. those who did not?",
+         "SELECT switch_intent, AVG(churned_next_60d) FROM gold.subscriber_features GROUP BY switch_intent",
+         feats.groupby("switch_intent").churned_next_60d.mean().mul(100).round(1).rename("churn_rate_%").to_frame().to_string()),
+        ("Churn rate by plan",
+         "SELECT plan, AVG(churned_next_60d)*100 FROM gold.subscriber_features GROUP BY plan ORDER BY 2 DESC",
+         feats.groupby("plan").churned_next_60d.mean().mul(100).round(1).sort_values(ascending=False).rename("churn_rate_%").to_frame().to_string()),
+    ]
+    md = ["# Genie agent questions — answered over the GOLD layer (run evidence)\n",
+          "> Produced by `data/run_local_pipeline.py` on synthetic data. In the workspace the Genie agent "
+          "generates equivalent SQL over `streamline_telco.gold.*` (see `genie/genie_space_config.json`).\n"]
+    for i, (qq, sql, ans) in enumerate(genie, 1):
+        md += [f"## Q{i} — {qq}\n", f"```sql\n{sql}\n```\n", f"```\n{ans}\n```\n"]
+    (EV / "query_results.md").write_text("\n".join(md))
+    log(f"\n[7 genie  ] answered {len(genie)} business questions -> evidence/query_results.md")
 
-    # ----- evidence files -----
-    metrics = dict(
-        run_ts=dt.datetime.now().isoformat(timespec="seconds"),
-        model="GradientBoostingClassifier(n_estimators=220,max_depth=3,lr=0.06)",
-        n_customers=int(len(feats)), n_features=len(FEATURES),
-        test_n=int(len(yte)), roc_auc=round(float(auc), 4),
-        pr_auc=round(float(ap), 4), base_churn_rate=round(float(base_rate), 4),
-        precision_at_top_decile=round(float(topk_precision), 4),
-        lift_over_base=round(float(lift), 3),
-        precision_at_0_5=round(float(pr), 4), recall_at_0_5=round(float(rc), 4),
-        f1_at_0_5=round(float(f1), 4), confusion_matrix=cm,
-        top_features=[{"feature": n, "importance": round(float(v), 4)} for n, v in imp[:10]],
-        risk_bands={str(b): int(n) for b, n in band_ct.items()},
-    )
+    # 8. APP dataset — top 300 by value at risk for the HTML cockpit
+    demo = scores.head(300).copy()
+    demo["bill_trend_pct"] = demo.bill_trend_pct.round(3); demo["dl_speed_l2m"] = demo.dl_speed_l2m.round(1)
+    summary = dict(n_subs=int(len(feats)), bands={k: int(v) for k, v in bands.items()},
+                   hc_subs=int(len(hc)), hc_revenue=float(hc.annual_value_eur.sum()),
+                   hc_value_at_risk=float(hc.value_at_risk_eur.sum()), roc_auc=round(float(auc), 3),
+                   lift=round(float(top_prec / base), 2), top_prec=round(float(top_prec), 3),
+                   driver_mix={k: int(v) for k, v in hc.driver.value_counts().items()},
+                   region_mix={k: int(v) for k, v in hc.region.value_counts().items()})
+    (ROOT / "app" / "demo_data.js").write_text(
+        "// generated by data/run_local_pipeline.py — top 300 of gold.save_list (synthetic)\n"
+        f"window.SUMMARY = {json.dumps(summary)};\nwindow.SAVE_LIST = {demo.to_json(orient='records')};\n")
+    log(f"[8 app    ] exported top 300 save-list rows -> app/demo_data.js")
+
+    metrics = dict(run_ts=dt.datetime.now().isoformat(timespec="seconds"),
+                   model="GradientBoostingClassifier(n_estimators=250,max_depth=3,lr=0.06)",
+                   n_subscribers=int(len(feats)), n_features=len(FEATURES), test_n=int(len(yte)),
+                   roc_auc=round(float(auc), 4), pr_auc=round(float(ap), 4),
+                   base_churn_rate_60d=round(float(base), 4),
+                   precision_at_top_decile=round(float(top_prec), 4),
+                   recall_at_top_decile=round(float(top_recall), 4),
+                   lift_at_top_decile=round(float(top_prec / base), 3),
+                   precision_at_0_5=round(float(pr), 4), recall_at_0_5=round(float(rc), 4),
+                   confusion_matrix=cm,
+                   ablation_without_genai=dict(roc_auc=round(float(auc_nv), 4),
+                                               precision_at_top_decile=round(float(top_prec_nv), 4)),
+                   top_features=[{"feature": a, "importance": round(float(b), 4)} for a, b in imp[:10]],
+                   risk_bands={k: int(v) for k, v in bands.items()},
+                   genai_intent_agreement=round(float(intent_acc), 4))
     (EV / "model_metrics.json").write_text(json.dumps(metrics, indent=2))
-
-    # query_results.md — the kind of SQL the Genie room / dashboard runs
-    q = ["# Query results (GOLD layer) — committed run evidence\n",
-         "> Produced by `data/run_local_pipeline.py`. In the workspace these are "
-         "Databricks SQL / Genie answers over the same gold tables.\n",
-         "## Q1 — Customers by risk band\n```",
-         band_ct.rename("customers").to_frame().to_string(), "```\n",
-         "## Q2 — Top 10 at-risk customers (retention call list)\n```",
-         scores.head(10).to_string(index=False), "```\n",
-         "## Q3 — Churn rate by region (highest first)\n```",
-         (feats.groupby("region").churned_next_90d.mean().mul(100).round(1)
-          .sort_values(ascending=False).rename("churn_rate_%").to_frame().to_string()), "```\n",
-         "## Q4 — Avg churn probability by contract type & payment method\n```",
-         (feats.pivot_table(index="contract_type", columns="pay_risky",
-                            values="churn_probability", aggfunc="mean").round(3).to_string()), "```\n",
-         "## Q5 — Value at risk in the Critical + High bands\n```"]
-    at_risk = feats[feats.risk_band.isin(["Critical", "High"])]
-    var_annual = (at_risk.monthly_bill_eur.sum() * 12)
-    q += [f"customers at risk (Critical+High): {len(at_risk):,}",
-          f"annual revenue represented        : EUR {var_annual:,.0f}",
-          f"(gross-margin @ 22% ≈ EUR {var_annual*0.22:,.0f} of margin exposed)", "```\n"]
-    (EV / "query_results.md").write_text("\n".join(q))
-
+    log(f"\n[done     ] {time.time()-t0:.1f}s — evidence/{{model_metrics.json,model_run_output.txt,query_results.md}}")
     (EV / "model_run_output.txt").write_text(_log.getvalue())
-    log("\n[done  ] wrote gold tables + evidence/{model_metrics.json,model_run_output.txt,query_results.md}")
 
 
 if __name__ == "__main__":

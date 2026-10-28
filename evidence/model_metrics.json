@@ -1,73 +1,78 @@
 {
-  "run_ts": "2026-08-28T15:52:19",
-  "model": "GradientBoostingClassifier(n_estimators=220,max_depth=3,lr=0.06)",
-  "n_customers": 15000,
-  "n_features": 17,
-  "test_n": 3750,
-  "roc_auc": 0.7646,
-  "pr_auc": 0.546,
-  "base_churn_rate": 0.2229,
-  "precision_at_top_decile": 0.6773,
-  "lift_over_base": 3.038,
-  "precision_at_0_5": 0.6602,
-  "recall_at_0_5": 0.3254,
-  "f1_at_0_5": 0.4359,
+  "run_ts": "2026-10-28T07:51:29",
+  "model": "GradientBoostingClassifier(n_estimators=250,max_depth=3,lr=0.06)",
+  "n_subscribers": 20000,
+  "n_features": 21,
+  "test_n": 5000,
+  "roc_auc": 0.7826,
+  "pr_auc": 0.4859,
+  "base_churn_rate_60d": 0.1508,
+  "precision_at_top_decile": 0.562,
+  "recall_at_top_decile": 0.3727,
+  "lift_at_top_decile": 3.727,
+  "precision_at_0_5": 0.6645,
+  "recall_at_0_5": 0.2706,
   "confusion_matrix": [
     [
-      2774,
-      140
+      4143,
+      103
     ],
     [
-      564,
-      272
+      550,
+      204
     ]
   ],
+  "ablation_without_genai": {
+    "roc_auc": 0.7293,
+    "precision_at_top_decile": 0.422
+  },
   "top_features": [
     {
-      "feature": "churn_mentions",
-      "importance": 0.2987
+      "feature": "switch_intent",
+      "importance": 0.3088
     },
     {
-      "feature": "bill_trend_pct",
-      "importance": 0.1282
+      "feature": "dl_speed_l2m",
+      "importance": 0.1349
     },
     {
       "feature": "n_retention_calls",
-      "importance": 0.1108
+      "importance": 0.1012
     },
     {
-      "feature": "is_variable",
-      "importance": 0.077
+      "feature": "bill_trend_pct",
+      "importance": 0.0855
     },
     {
-      "feature": "pay_risky",
-      "importance": 0.0737
-    },
-    {
-      "feature": "days_to_contract_end",
-      "importance": 0.0674
-    },
-    {
-      "feature": "tenure_months",
-      "importance": 0.062
+      "feature": "days_to_commitment_end",
+      "importance": 0.0634
     },
     {
       "feature": "avg_sentiment",
-      "importance": 0.0462
-    },
-    {
-      "feature": "avg_bill_eur",
-      "importance": 0.0267
+      "importance": 0.0528
     },
     {
       "feature": "n_negative_calls",
-      "importance": 0.0257
+      "importance": 0.0495
+    },
+    {
+      "feature": "n_calls_60d",
+      "importance": 0.0363
+    },
+    {
+      "feature": "tenure_months",
+      "importance": 0.0333
+    },
+    {
+      "feature": "dropped_calls_l2m",
+      "importance": 0.0254
     }
   ],
   "risk_bands": {
-    "Critical": 497,
-    "High": 1104,
-    "Medium": 2735,
-    "Low": 10664
-  }
+    "Critical": 799,
+    "High": 1026,
+    "Medium": 2239,
+    "Low": 15936
+  },
+  "genai_intent_agreement": 0.9497
 }

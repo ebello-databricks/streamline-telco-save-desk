@@ -1,61 +1,82 @@
-# Query results (GOLD layer) — committed run evidence
+# Genie agent questions — answered over the GOLD layer (run evidence)
 
-> Produced by `data/run_local_pipeline.py`. In the workspace these are Databricks SQL / Genie answers over the same gold tables.
+> Produced by `data/run_local_pipeline.py` on synthetic data. In the workspace the Genie agent generates equivalent SQL over `streamline_telco.gold.*` (see `genie/genie_space_config.json`).
 
-## Q1 — Customers by risk band
-```
-           customers
-risk_band           
-Critical         497
-High            1104
-Medium          2735
-Low            10664
+## Q1 — How many subscribers are High or Critical risk, and how much annual revenue do they represent?
+
+```sql
+SELECT risk_band, COUNT(*) subs, SUM(annual_value_eur) revenue FROM gold.save_list WHERE risk_band IN ('High','Critical') GROUP BY risk_band
 ```
 
-## Q2 — Top 10 at-risk customers (retention call list)
 ```
-customer_id         region       segment product  monthly_bill_eur  churn_probability risk_band                                                        top_reasons  n_negative_calls  n_retention_calls  churn_mentions
-  PLN110827          Altre   residential   power             78.73             0.9730  Critical called retention line; mentioned switching/competitor; bill up 47%               3.0                1.0             1.0
-  PLN100143        Sicilia microbusiness   power            154.39             0.9710  Critical called retention line; mentioned switching/competitor; bill up 62%               1.0                2.0             1.0
-  PLN102474       Campania   residential     gas            101.50             0.9692  Critical called retention line; mentioned switching/competitor; bill up 30%               1.0                1.0             1.0
-  PLN104496      Lombardia   residential   power             66.21             0.9644  Critical called retention line; mentioned switching/competitor; bill up 58%               2.0                1.0             1.0
-  PLN109154 Emilia-Romagna   residential   power             96.58             0.9642  Critical called retention line; mentioned switching/competitor; bill up 11%               1.0                2.0             1.0
-  PLN107636          Lazio   residential   power             53.82             0.9597  Critical called retention line; mentioned switching/competitor; bill up 41%               3.0                2.0             1.0
-  PLN110354      Lombardia   residential   power             43.40             0.9597  Critical    mentioned switching/competitor; bill up 43%; 1 negative call(s)               1.0                0.0             1.0
-  PLN113697        Toscana   residential   power             69.84             0.9597  Critical called retention line; mentioned switching/competitor; bill up 11%               2.0                3.0             1.0
-  PLN103490 Emilia-Romagna   residential   power             74.76             0.9583  Critical called retention line; mentioned switching/competitor; bill up 53%               1.0                2.0             1.0
-  PLN107729       Calabria   residential   power             84.94             0.9581  Critical called retention line; mentioned switching/competitor; bill up 11%               1.0                2.0             1.0
+           subs  revenue_eur
+risk_band                   
+Critical    799     362126.0
+High       1026     475678.0
 ```
 
-## Q3 — Churn rate by region (highest first)
-```
-                churn_rate_%
-region                      
-Altre                   23.8
-Liguria                 23.6
-Puglia                  23.5
-Campania                22.8
-Lombardia               22.7
-Lazio                   22.3
-Emilia-Romagna          22.1
-Toscana                 21.9
-Veneto                  21.9
-Sicilia                 21.8
-Piemonte                21.5
-Calabria                19.1
+## Q2 — Which region has the most at-risk subscribers because of network problems?
+
+```sql
+SELECT region, COUNT(*) FROM gold.save_list WHERE risk_band IN ('High','Critical') AND driver='network' GROUP BY region ORDER BY 2 DESC
 ```
 
-## Q4 — Avg churn probability by contract type & payment method
 ```
-pay_risky          0      1
-contract_type              
-fixed          0.138  0.254
-variable       0.249  0.396
+         at_risk_network
+region                  
+South                183
+North                148
+Capital              112
+Central              105
+Islands               93
+Coast                 42
 ```
 
-## Q5 — Value at risk in the Critical + High bands
+## Q3 — Show the 10 subscribers with the highest value at risk and what we should offer them.
+
+```sql
+SELECT subscriber_id, plan, churn_probability, value_at_risk_eur, next_best_offer FROM gold.save_list ORDER BY value_at_risk_eur DESC LIMIT 10
 ```
-customers at risk (Critical+High): 1,601
-annual revenue represented        : EUR 1,910,374
-(gross-margin @ 22% ≈ EUR 420,282 of margin exposed)
+
+```
+subscriber_id           plan  churn_probability  value_at_risk_eur                          next_best_offer
+    STL102197 Fibre + Mobile             0.8861             2377.0 Loyalty price match (-20% for 12 months)
+    STL108408 Fibre + Mobile             0.7499             1972.0 Loyalty price match (-20% for 12 months)
+    STL102484 Fibre + Mobile             0.6751             1775.0 Loyalty price match (-20% for 12 months)
+    STL111856 Fibre + Mobile             0.7072             1603.0       Early renewal with handset upgrade
+    STL112387 Fibre + Mobile             0.7365             1409.0             Network fix + 1 month credit
+    STL109097      Fibre 1Gb             0.8660             1331.0             Network fix + 1 month credit
+    STL105965 Fibre + Mobile             0.5632             1316.0     Priority care callback + bill credit
+    STL117766 Fibre + Mobile             0.5572             1312.0             Network fix + 1 month credit
+    STL110863 Fibre + Mobile             0.7253             1268.0 Loyalty price match (-20% for 12 months)
+    STL111916 Fibre + Mobile             0.7093             1253.0 Loyalty price match (-20% for 12 months)
+```
+
+## Q4 — What is the actual churn rate for customers who mentioned switching on a care call vs. those who did not?
+
+```sql
+SELECT switch_intent, AVG(churned_next_60d) FROM gold.subscriber_features GROUP BY switch_intent
+```
+
+```
+               churn_rate_%
+switch_intent              
+0                      10.4
+1                      45.2
+```
+
+## Q5 — Churn rate by plan
+
+```sql
+SELECT plan, AVG(churned_next_60d)*100 FROM gold.subscriber_features GROUP BY plan ORDER BY 2 DESC
+```
+
+```
+                  churn_rate_%
+plan                          
+Mobile 50GB               15.8
+Fibre + Mobile            15.2
+Fibre 1Gb                 15.2
+Mobile Unlimited          14.9
+Mobile 10GB               14.0
 ```

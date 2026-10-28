@@ -1,32 +1,53 @@
-======================================================================
-PLENITUDE VOICE-TO-RETENTION  —  local pipeline run
-run_ts=2026-08-28T15:52:13  ref_date=2026-06-30
-======================================================================
+========================================================================
+STREAMLINE TELCO SAVE DESK  —  local pipeline run (synthetic data)
+run_ts=2026-10-28T07:51:17  ref_date=2026-09-30
+========================================================================
 
-[silver] loaded raw: customers=15,000  consumption=180,000  contracts=15,000  calls=10,646
-[genai ] enriched 10,646 calls  sentiment_mix={'neutral': 0.627, 'negative': 0.303, 'positive': 0.07}  churn_signal_calls=3,650
-[gold  ] feature table: 15,000 customers x 17 features
+[1 silver ] expectations applied (rows before -> after):
+            subscribers    20,000 ->   20,000
+            contracts      20,000 ->   20,000
+            usage         120,000 ->  120,000
+            care_calls     13,749 ->   13,749
 
-[model ] GradientBoosting  (test set n=3,750)
-         ROC-AUC            = 0.765
-         PR-AUC (avg prec)  = 0.546
-         base churn rate    = 0.223
-         precision @ top10% = 0.677   (lift 3.04x over base)
-         precision @0.5     = 0.660   recall = 0.325   f1 = 0.436
-         confusion matrix   = [[2774, 140], [564, 272]]   [[TN,FP],[FN,TP]]
+[2 gen ai ] enriched 13,749 care calls
+            sentiment mix   = {'neutral': 0.606, 'negative': 0.341, 'positive': 0.053}
+            intent mix      = {'network': 4139, 'billing': 3319, 'retention': 2556, 'general': 2073, 'device': 1662}
+            switch-intent calls = 3,065
+            intent agreement vs. IVR queue label = 95.0%
 
-[model ] top feature importances:
-         churn_mentions          0.299  #######################
-         bill_trend_pct          0.128  ##########
-         n_retention_calls       0.111  ########
-         is_variable             0.077  ######
-         pay_risky               0.074  #####
-         days_to_contract_end    0.067  #####
-         tenure_months           0.062  ####
-         avg_sentiment           0.046  ###
+[3 gold   ] feature table: 20,000 subscribers x 21 features
 
-[gold  ] churn_scores risk bands:
-         Critical     497  ( 3.3%)
-         High       1,104  ( 7.4%)
-         Medium     2,735  (18.2%)
-         Low       10,664  (71.1%)
+[4 ml     ] GradientBoostingClassifier  (train n=15,000, test n=5,000)
+            ROC-AUC              = 0.783
+            PR-AUC               = 0.486
+            base churn rate      = 0.151
+            precision @ top 10%  = 0.562   (lift 3.73x)
+            recall    @ top 10%  = 0.373   (share of all churners caught)
+            precision/recall@0.5 = 0.664 / 0.271   f1 = 0.385
+            confusion matrix     = [[4143, 103], [550, 204]]   [[TN,FP],[FN,TP]]
+            ablation WITHOUT Gen AI call features: ROC-AUC 0.729, precision@top10% 0.422  -> Gen AI adds +0.053 AUC
+            top feature importances:
+              switch_intent             0.309  ########################
+              dl_speed_l2m              0.135  ##########
+              n_retention_calls         0.101  ########
+              bill_trend_pct            0.085  ######
+              days_to_commitment_end    0.063  #####
+              avg_sentiment             0.053  ####
+              n_negative_calls          0.050  ###
+              n_calls_60d               0.036  ##
+
+[5 action ] save list scored + next-best-offer assigned:
+            Critical     799  ( 4.0%)
+            High       1,026  ( 5.1%)
+            Medium     2,239  (11.2%)
+            Low       15,936  (79.7%)
+            driver mix (High+Critical) = {'price': 704, 'network': 683, 'contract': 434, 'service': 4}
+
+[6 serve  ] OLTP serving (SQLite stand-in for Lakebase Postgres): 20,000 rows loaded
+            500 point lookups by subscriber_id: avg 0.012 ms
+            agent write-back -> save_actions: [(1, 'STL102197', 'AG017', 'Loyalty price match (-20% for 12 months)', 'accepted', '2026-10-28T07:51:29')]
+
+[7 genie  ] answered 5 business questions -> evidence/query_results.md
+[8 app    ] exported top 300 save-list rows -> app/demo_data.js
+
+[done     ] 12.0s — evidence/{model_metrics.json,model_run_output.txt,query_results.md}

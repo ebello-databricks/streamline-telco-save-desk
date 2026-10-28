@@ -1,47 +1,33 @@
-# Decisions & trade-offs
+# Decisions and trade-offs
 
-The FE Bar rewards documented reasoning. These are the calls I made and why —
-also the objection-handling script for the roleplay's technical persona.
+Also the answer sheet for the technical persona in the role-play.
 
-### 1. GradientBoosting, not a deep model
-- **Chose:** `GradientBoostingClassifier` (sklearn, MLflow-tracked).
-- **Why:** tabular data at 15k rows; the retention team must **trust the "why"**,
-  so per-customer feature attributions matter more than a fraction of a point of
-  AUC. Trains in seconds, cheap to retrain nightly.
-- **Trade-off:** a deep/tabular-transformer model *might* squeeze more AUC, at the
-  cost of explainability, cost, and ops burden — not worth it here. Result stands
-  on its own: **ROC-AUC 0.765, 3.04× top-decile lift.**
+### 1. AI Functions in SQL, not a fine-tuned or self-hosted model
+- **Chose:** `ai_analyze_sentiment`, `ai_classify`, `ai_query` on Databricks-hosted models, run incrementally on new calls only.
+- **Why:** short transcripts, generic task. No model to host, transcripts stay inside the governed platform, ships in days.
+- **Trade-off:** per-token cost at scale (≈$1.2k/month at 690k calls). Mitigation: one combined JSON prompt (about −60% tokens). Fine-tune only if a Streamline-specific taxonomy requires it.
+- **Proof of value:** ablation in `evidence/model_metrics.json`: without the Gen AI call features, ROC-AUC falls from 0.783 to 0.729 and top-decile precision from 0.562 to 0.422.
 
-### 2. Foundation Model API (`ai_query`), not a fine-tuned model
-- **Chose:** built-in `ai_analyze_sentiment` / `ai_classify` / `ai_query` in SQL.
-- **Why:** transcripts are short and the task (sentiment, intent, switch-intent)
-  is well within a general LLM. Zero hosting, nothing leaves UC, and it ships in a
-  day instead of a fine-tune cycle.
-- **Trade-off:** per-call inference cost at full scale; mitigated by scoring only
-  new calls incrementally and caching. A fine-tune becomes worth it only if volume
-  or a domain-specific taxonomy demands it.
+### 2. Gradient boosting, not deep learning
+- **Why:** tabular data with 21 features. Agents need the "why" (top 3 reasons on every row). Trains in seconds and retrains weekly.
+- **Trade-off:** a more complex model might gain some AUC but lose explainability; not worth it for a save desk.
 
-### 3. Lakebase for serving, not query-from-Delta
-- **Chose:** sync `gold.churn_scores` into Lakebase (Postgres) for the app.
-- **Why:** the cockpit does **point lookups + action write-back** — an OLTP
-  pattern. Delta is built for analytical scans, not per-row app latency.
-- **Trade-off:** a second store to keep in sync; handled by a managed synced table
-  so it's declarative, not a hand-rolled reverse-ETL job.
+### 3. Lakebase for the app, not direct Delta reads
+- **Why:** the app does point lookups and transactional write-back (`save_actions`), which is OLTP work. A synced table keeps it declarative.
+- **Trade-off:** a second store. Accepted because sync is managed and outcomes in Postgres can be read by any CRM.
 
-### 4. Synthetic data, not scrubbed real data
-- **Chose:** generate the dataset (`generate_synthetic_data.py`) with churn made
-  genuinely learnable from voice + billing signals.
-- **Why:** **customer-safe by construction** (mandatory for the FE Bar), fully
-  reproducible (seeded), and it lets me prove the thesis — voice features end up as
-  the top predictors — without touching a single real record.
-- **Trade-off:** synthetic churn base rate (22.3%) is higher and cleaner than the
-  real market (~12%). I keep those two numbers explicitly distinct: 22.3% is the
-  model's base rate for the lift math; 12%→11% is the business case on real market
-  churn.
+### 4. Rule-based next-best-offer first, uplift model later
+- **Why:** the retention lead owns the offer catalogue; rules mapped to the primary driver (network → fix + credit, price → loyalty match, contract → early renewal) are auditable from day 1.
+- **Trade-off:** not optimised yet. Outcomes logged in the app become the training data for an uplift model in phase 3.
 
-### 5. Voice as a first-class feature, not a side dashboard
-- **Chose:** fold sentiment/intent/switch-intent into the churn feature table.
-- **Why:** the entire point is that the call centre already knows who's leaving.
-  Proven: `churn_mentions` is the #1 feature (importance 0.30).
-- **Trade-off:** depends on call coverage — customers who never call have weaker
-  signal, so billing/contract features carry them (and they're lower-risk anyway).
+### 5. Nightly batch scoring, not real time
+- **Why:** save decisions are made daily; batch cuts cost and complexity.
+- **Trade-off:** a call made at 10:00 affects the score the next morning. Real-time scoring on call end is a phase-3 option (Model Serving + Lakebase).
+
+### 6. Synthetic data with learnable signal
+- **Why:** customer-safe by construction and reproducible (seed 42). Churn is generated from realistic drivers so the model learns real patterns.
+- **Trade-off:** the synthetic 60-day churn base rate (15.1%) is higher than a real monthly rate; it is used only for the lift math. The business case uses 1.4% monthly churn as a separate, explicit assumption.
+
+### 7. Local mirror for evidence
+- **Why:** the evaluator reads text. `data/run_local_pipeline.py` runs the same feature, model and offer code the workspace notebook imports, and commits the output. The LLM is replaced by a lexicon and Lakebase by SQLite, both labelled.
+- **Trade-off:** local Gen AI is a stand-in; in the workspace the AI Functions do this step.

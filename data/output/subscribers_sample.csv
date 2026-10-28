@@ -1,0 +1,51 @@
+subscriber_id,region,segment,age_band,payment_method,acquisition_channel,tenure_months,plan,lines
+STL100000,Capital,consumer,25-34,direct_debit,telesales,9,Mobile Unlimited,2
+STL100001,North,consumer,35-49,direct_debit,store,31,Fibre 1Gb,1
+STL100002,Central,consumer,35-49,direct_debit,store,15,Mobile 10GB,1
+STL100003,Capital,consumer,50-64,card,online,16,Fibre + Mobile,1
+STL100004,Capital,consumer,18-24,direct_debit,comparison_site,44,Fibre 1Gb,1
+STL100005,Capital,family,35-49,bank_transfer,online,5,Fibre + Mobile,1
+STL100006,Capital,consumer,50-64,direct_debit,telesales,14,Fibre + Mobile,1
+STL100007,Central,consumer,18-24,direct_debit,store,38,Mobile 50GB,1
+STL100008,Central,consumer,35-49,direct_debit,store,15,Mobile Unlimited,3
+STL100009,South,consumer,25-34,card,store,48,Mobile Unlimited,1
+STL100010,North,family,35-49,card,comparison_site,16,Fibre 1Gb,2
+STL100011,Capital,consumer,25-34,direct_debit,store,24,Mobile 50GB,3
+STL100012,Capital,consumer,35-49,direct_debit,comparison_site,126,Fibre + Mobile,1
+STL100013,Coast,consumer,35-49,direct_debit,online,55,Mobile 50GB,3
+STL100014,Coast,consumer,65+,direct_debit,store,29,Mobile 50GB,1
+STL100015,North,family,50-64,direct_debit,store,46,Mobile 10GB,1
+STL100016,North,consumer,65+,card,store,10,Fibre 1Gb,2
+STL100017,South,consumer,25-34,card,store,5,Mobile Unlimited,1
+STL100018,Capital,youth,50-64,direct_debit,online,8,Mobile 50GB,1
+STL100019,North,family,25-34,card,online,27,Fibre 1Gb,1
+STL100020,South,consumer,50-64,direct_debit,store,38,Fibre + Mobile,1
+STL100021,South,youth,50-64,card,store,46,Mobile 10GB,1
+STL100022,Capital,youth,18-24,direct_debit,store,5,Fibre + Mobile,2
+STL100023,Capital,consumer,35-49,direct_debit,store,52,Fibre + Mobile,3
+STL100024,South,consumer,35-49,card,store,44,Mobile 50GB,1
+STL100025,North,family,35-49,direct_debit,store,31,Fibre 1Gb,1
+STL100026,South,consumer,25-34,direct_debit,store,66,Mobile 50GB,2
+STL100027,Central,youth,50-64,direct_debit,store,32,Mobile 50GB,2
+STL100028,North,consumer,65+,direct_debit,online,6,Mobile 50GB,2
+STL100029,Islands,consumer,18-24,direct_debit,online,51,Fibre + Mobile,1
+STL100030,Capital,family,65+,direct_debit,online,12,Fibre + Mobile,1
+STL100031,Capital,consumer,25-34,direct_debit,online,42,Fibre + Mobile,1
+STL100032,Coast,youth,35-49,card,online,36,Mobile 50GB,1
+STL100033,South,family,65+,bank_transfer,comparison_site,54,Fibre 1Gb,1
+STL100034,Islands,consumer,35-49,direct_debit,online,62,Mobile Unlimited,4
+STL100035,Capital,family,35-49,direct_debit,comparison_site,28,Mobile 50GB,4
+STL100036,North,family,25-34,direct_debit,comparison_site,58,Mobile Unlimited,1
+STL100037,North,family,18-24,direct_debit,online,19,Mobile Unlimited,3
+STL100038,Capital,youth,18-24,direct_debit,online,18,Mobile 10GB,2
+STL100039,Coast,consumer,65+,direct_debit,online,19,Mobile 50GB,1
+STL100040,Central,consumer,35-49,bank_transfer,store,10,Mobile 50GB,2
+STL100041,Coast,consumer,50-64,direct_debit,store,63,Mobile 50GB,2
+STL100042,Central,consumer,65+,bank_transfer,store,9,Mobile 10GB,1
+STL100043,Central,youth,65+,card,online,10,Mobile 50GB,1
+STL100044,North,family,35-49,bank_transfer,telesales,35,Fibre + Mobile,1
+STL100045,North,consumer,50-64,bank_transfer,store,20,Fibre + Mobile,1
+STL100046,Coast,consumer,25-34,direct_debit,telesales,42,Mobile 10GB,1
+STL100047,North,consumer,35-49,bank_transfer,comparison_site,8,Mobile Unlimited,1
+STL100048,Capital,consumer,18-24,card,online,63,Mobile 50GB,1
+STL100049,North,consumer,35-49,direct_debit,store,62,Fibre + Mobile,3

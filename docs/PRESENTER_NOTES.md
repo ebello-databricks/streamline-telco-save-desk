@@ -1,166 +1,196 @@
 # Streamline Telco Save Desk: presenter reading notes
 
-**Total: about 25 minutes, plus questions.** Deck: `deck/Streamline-Telco-Save-Desk.pdf`. Demo: `app/simulator.html` (Chrome, full screen).
+**Time:** about 20 minutes of talk. The session is 20–30 minutes, so this leaves time for questions.
+**Deck:** the **Google Slides** version, *Streamline Telco - Save Desk (FE Bar)*, in presenter mode.
+**Demo:** `app/simulator.html` in Chrome, full screen.
 
-**In the room:** the **Chief Customer Officer** (business: funds the decision; owns churn and the retention budget) and the **Head of Data Platform** (technical: has to live with what we build). The **Head of Retention** runs the save desk; mention their team often.
+**Who is in the room (two AI personas):**
+- The **Chief Customer Officer (CCO)**. Business person. Owns churn and the retention budget. Decides and pays.
+- The **Head of Data Platform**. Technical person. Will run what we build.
+- The **Head of Retention** runs the save desk. They are not in the room, but mention their team often.
 
-**Three numbers to remember:** 45% vs 10% (churn after a switching mention) · 3.7× (precision of the call list vs random) · €5M net a year (−1 point of churn).
+**Three numbers to remember:** 45% vs 10% · 3.7 times · 5 million euros net a year.
 
-**Before you start:** open the PDF on slide 1. Open the simulator in a second tab on *Solution overview*, with the Demo script panel collapsed. Reload the simulator so the Lakebase table is empty.
+## How to present to an AI
+- **You lead.** The AI will not interrupt much. Do not ask questions and wait. Ask only one question, at the end.
+- **Say what you see.** When you click, read the number on the screen out loud. The AI may not see your screen.
+- **Say the structure out loud:** "First I tell you what I will show." → "Now I show it." → "This is what it means for you."
+- **Say who you are talking to:** "For you, as CCO…" and "For you, as Head of Data Platform…"
+- **Answer objections before they come.** Look for the **OBJECTION** lines below.
+- **If they ask a question:** give the answer first, then one reason. Then stop.
 
-How to read this: **SAY** = the words to use · **DO** = what to click · **IF ASKED** = short answers · **→** = transition.
+**Before you start:**
+1. Open the Google Slides deck on slide 1, in presenter mode.
+2. Open the simulator in a second tab, on *Solution overview*.
+3. Press Cmd + R on the simulator, so it starts empty.
 
----
+**Slide order (the demo is at the end, so just go to the next slide each time):**
+1. Slides 1–4: introduction and result
+2. Slides 5–7: how it is built
+3. Slides 8–11: value, cost and plan
+4. Slide 12, then the live demo in the simulator
+5. Slide 13: the decision
+6. Slides 14–16: only if needed (questions, appendix, closing)
 
-## Part 1: Set-up and outcome (5 min)
-
-### Slide 1: Keep the customers who are already telling us they will leave · 0:00–0:45
-**SAY:** "Thank you for your time. In the next 25 minutes I want to show you how Streamline can keep the customers who are already telling you they are about to leave. I'll start with the outcome and what we found. Then a short live demo of the Save Desk, the architecture, the cost, and a plan to prove it in six weeks. Please interrupt me at any point."
-**DO:** Look at both stakeholders and name what each will get: "For you, the business case and the KPIs. For you, how it is built and governed."
-**→** "Let me start with the outcome."
-
-### Slide 2: The outcome: one point less churn, €5M a year kept · 0:45–2:30
-**SAY:** "Our target is one point of annual churn, from 16.8% to 15.8%. For Streamline that is 20,000 customers a year who stay: about €6.5 million of revenue protected, or about €5 million net after offers and the platform."
-"For you as CCO, it is one number tracked every month against a control group, so it is measured, not forecast. For the retention team, every agent starts the day knowing who to call, why, and what to offer."
-"And the cost: about $1.6k of compute for a six-week POC, about $3.5k a month in production at list price."
-**KEY NUMBERS:** 16.8% → 15.8% · 20,000 · €6.5M (€5.0M net) · 6 weeks · 3.7×.
-**IF ASKED "where do the numbers come from?":** "The model numbers are measured on the build. The business inputs (2 million subscribers, 1.4% monthly churn, €27 ARPU) are planning assumptions that we replace with your actuals in week 1."
-**→** "Why is this possible now? Because today churn is visible too late."
-
-### Slide 3: Today churn becomes visible only after the customer has left · 2:30–4:00
-**SAY:** "Today the retention team sees churn when the porting request arrives, and by then the decision is made. The signals come earlier, in three places: what customers say on care calls, how the network performs for them, and what happens to their bill and contract. Nobody joins them up. So the team reacts late, offers are generic, and analysts wait days for a BI ticket."
-**DO, ASK the CCO:** "Does this match what you see? How does your team find at-risk customers today?" *Listen; reuse their words later.*
-**→** "We built this on synthetic data to see what the signals are worth."
-
-### Slide 4: What we learned from the build · 4:00–5:30
-**SAY:** "Three things stood out. One: customers who mention switching on a care call churn at 45%, against 10% for everyone else, more than four times higher. Two: if the save desk calls the model's top 10%, more than half are real churners, 3.7 times better than calling at random. Three: reading the calls is what makes the difference. When we remove the call features that Gen AI extracts, the model clearly gets worse. So the value of Gen AI is measured, not assumed."
-**KEY LINE:** "The strongest predictor is what the customer says on the call. That signal is free; we only need to read it."
-**IF ASKED (technical):** "Gradient boosting, 21 features, 5,000-subscriber hold-out. ROC-AUC 0.783 vs 0.729 without the call features; PR-AUC 0.49. On real data we expect lower numbers, so the POC gate is 2.5×, not 3.7×."
-**→** "Let me show you what that looks like for the people who use it."
+**Key:** **SAY** = read this · **DO** = click this · **OBJECTION** = answer it before they ask · **→** = move to the next slide.
 
 ---
 
-## Part 2: The demo, tell-show-tell (8 min)
+## Part 1: Introduction and outcome (4 minutes)
 
-### Slide 5: A day with the Save Desk · 5:30–6:15 (TELL)
-**SAY:** "Here is a day with the Save Desk. At 2 a.m. the platform does the reading. At 8:30 the agent opens the save list. On the call they log the outcome. And at any time the manager can ask Genie. I'll show you exactly that: first, briefly, how the data gets there; then the agent's screen; then Genie. Watch for three things: who to call, why, and what to offer."
-**DO:** Switch to the simulator tab.
+### Slide 1: Keep the customers who are already telling us they will leave · 0:00–1:00
+**SAY:** "Good morning, and thank you for your time. My name is Emmanuele Bello. I am a Delivery Solutions Architect at Databricks, and I am based in Italy. I work with large companies in Southern Europe. I help them take data and AI projects from the first idea to production, and I make sure they deliver real value. I built the solution you will see today."
+**SAY:** "Today I want to show you how Streamline can keep the customers who are telling you they want to leave. First, the result and what we learned. Then how it is built and protected. Then the value, the cost and a six-week plan. And at the end, a short live demo, so you can see it working."
+**SAY:** "For you, as CCO, I will focus on the business case and the numbers. For you, as Head of Data Platform, I will focus on how it is built, how it is secured, and how it runs."
+**→** "Let me start with the result."
 
-### Demo step 1: Solution overview · 6:15–6:45
-**DO:** Stay on *Solution overview*.
-**SAY:** "This is Streamline's Databricks workspace. The whole solution is one journey: raw data, ingestion with Lakeflow, governance in Unity Catalog, AI reading the calls, the churn model, Lakebase and Genie, and the app. Everything you see runs on one platform."
+### Slide 2: The outcome: one point less churn, €5M a year kept · 1:00–2:30
+**SAY:** "Our goal is to reduce churn by one point. From 16.8% to 15.8% a year. For Streamline, this means 20,000 customers stay every year. That is about 6.5 million euros of revenue. After the cost of the offers and the platform, it is about 5 million euros net."
+**SAY:** "For you, as CCO, this is one number. We measure it every month against a control group. So it is a real result, not a forecast. For the retention team, every agent starts the day knowing who to call, why, and what to offer."
+**SAY:** "And the cost is low. About 1,600 dollars for a six-week test. About 3,500 dollars a month in production."
+**OBJECTION:** "The model results come from the build. The business numbers are our assumptions: 2 million customers, 1.4% churn a month, and 27 euros a month per customer. In week one, we replace them with your real numbers."
+**→** "Why do we need this? Because today, you see churn too late."
 
-### Demo step 2: Jobs & Pipelines › Run now · 6:45–7:45
-**DO:** Click *Jobs & Pipelines* → **▶ Run now**. While it runs, click the **genai_enrichment** task.
-**SAY:** "This is the nightly job. It runs at 2 a.m., deployed as code from one Asset Bundle. Ingest, read the calls with AI, apply governance, score every subscriber, refresh the app's database. Last night: 20,000 subscribers, 120,000 usage rows, 13,749 care calls."
-**DO:** Open the tab **Lakeflow pipeline: save-desk-ingest**.
-**SAY (for the technical stakeholder):** "Ingestion is a Lakeflow Declarative Pipeline. Auto Loader picks up new files incrementally, and these expectations are data-quality rules: a missing transcript or an implausible bill is dropped before it reaches the model. In production the files become Lakeflow Connect or Kafka feeds from billing, network and the contact centre. Nothing downstream changes."
+### Slide 3: Today churn becomes visible only after the customer has left · 2:30–3:15
+**SAY:** "Today, the retention team sees churn when the customer asks to move their number. By then it is too late. But the warning signs come earlier, from three places. What the customer says when they call customer care. How the network works for them. And what happens to their bill and their contract. Today nobody puts these signs together. So the team reacts late, the offers are the same for everyone, and analysts wait days for a report. I think your retention team knows this problem well."
+**→** "We built a solution with test data, to see what these signs are worth."
 
-### Demo step 3: AI Functions › Run · 7:45–8:30
-**DO:** Click *AI Functions* → **▶ Run**. Let the rows appear; point at a negative call marked **1 · switching**.
-**SAY:** "Here the AI reads every call, straight from SQL: sentiment, the reason for the call, and whether the customer is threatening to leave. This one is about a bill that nearly doubled, and the AI flags switching intent. The models are hosted in Databricks, so transcripts never leave the platform, and only new calls are processed each night."
+### Slide 4: What we learned from the build · 3:15–4:30
+**SAY:** "We learned three things. First: customers who talk about switching to a competitor on a call leave at 45%. Everyone else leaves at 10%. That is more than four times higher. Second: if the save desk calls the top 10% of the list, more than half are customers who really want to leave. That is 3.7 times better than calling at random. Third: reading the calls makes the difference. Without the information that AI takes from the calls, the model is clearly worse. So we measured the value of AI. We did not just assume it."
+**SAY:** "The best sign is what the customer says on the call. We already have it. We only need to read it."
+**SAY:** "For you, as Head of Data Platform: we use a gradient boosting model with 21 features. We tested it on 5,000 customers it had never seen. The score is 0.78 with the call data, and 0.73 without it."
+**OBJECTION:** "With real data, I expect lower results. So in the test, our target is 2.5 times, not 3.7."
+**→** "How do we build this? Let me show you the architecture. You will see it working in the demo at the end."
 
-### Demo step 4: Catalog › care_calls · 8:30–9:00
-**DO:** Click *Catalog* → **raw › care_calls** → tab **Sample data**.
-**SAY:** "Transcripts are the sensitive asset. I'm logged in as a retention user, so Unity Catalog masks the text: I see [REDACTED]. Only the data team sees it." **DO:** tab **Lineage** on *save_list*: "And lineage is automatic, from the raw files all the way to the app and Genie."
-*(Optional, 20 s: Experiments & Models: "switch intent is the #1 driver, and the ablation on the right is the proof that reading the calls matters.")*
+---
 
-### Demo step 5: Apps › save-desk (the heart of the demo) · 9:00–11:30
+## Part 2: How it is built (4 minutes, mostly technical)
+
+### Slide 5: One governed journey from raw data to the agent's screen · 4:30–5:45
+**SAY:** "Now the architecture, mainly for you, as Head of Data Platform. Lakeflow loads the data and checks its quality. Unity Catalog controls access to everything, and it tracks where the data comes from. AI Functions read the calls. The churn model is tracked in MLflow. Lakebase is the database for the app. Genie uses the same tables. And the app is the agent's screen. We deploy everything together, as code."
+**SAY:** "For you, as CCO, this means one platform, one copy of the data, and one set of permissions."
+
+### Slide 6: Security and governance by design · 5:45–6:45
+**SAY:** "The call text is the most sensitive data. So it has the strongest protection. It is tagged, hidden, and only the data team can read it. The retention team and Genie see only the results. The AI models run inside Databricks, so no data goes outside."
+**OBJECTION:** "We check quality in three ways. First, rules in the pipeline remove bad data. Second, in the build, the AI agreed 95% of the time with the reason the customer chose on the phone menu. Third, in the test, we will compare the AI with 500 calls checked by people. Our target is at least 85%."
+
+### Slide 7: Decisions and trade-offs · 6:45–8:15
+**SAY:** "These are the choices we made, and why. We use ready AI functions, not a custom-trained model. This is faster, and everything stays secure. We use a simple model, not deep learning, because the agent needs to know why they are calling. We use Lakebase for the app, because the app needs fast reads and writes. We start with simple rules for the offers. Later, we learn from real results. And we start with a night job. We move to real time only if the pilot shows we need it."
+**OBJECTION:** "Delta, Postgres and MLflow are open source. So you are not locked in."
+**→** "Now the business. What is it worth, what does it cost, and how do we prove it fast?"
+
+---
+
+## Part 3: Value, cost and plan (4 minutes, business)
+
+### Slide 8: Value, cost and plan
+**SAY:** Use the line above and go to the next slide.
+
+### Slide 9: Business case: about €5.0M net per year · 8:15–9:45
+**SAY:** "Here is the calculation, step by step. Streamline has 2 million customers. Each month, 1.4% leave. That is about 336,000 customers a year, and about 109 million euros of revenue. We want to keep 20,000 of them. If agents save one customer in four, we need to reach 80,000 customers who want to leave. Our list is right 56% of the time. So we need about 143,000 calls a year. That is about 550 calls a day. 20,000 customers kept, at 324 euros a year each, is 6.5 million euros. The offers cost about 1.4 million euros. The platform costs about 40,000 euros. So the net value is about 5 million euros a year."
+**OBJECTION:** "And if the agents save only half as many customers, the value is still about 2.2 million euros a year."
+
+### Slide 10: Cost: about $1.6k for the POC, $3.5k a month in production · 9:45–10:30
+**SAY:** "The platform cost is small compared to the value. About 1,600 dollars for the six-week test. About 3,500 dollars a month in production. That is about 42,000 dollars a year. The biggest cost is the AI that reads 690,000 calls a month. If we do the three AI tasks in one step, the cost goes down to about 2,800 dollars a month."
+**OBJECTION:** "These are list prices. We will confirm them before any quote."
+
+### Slide 11: Plan: prove it in six weeks, then scale with a control group · 10:30–11:45
+**SAY:** "We reduce the risk in three steps. At each step, you decide if we continue, based on your numbers. Step one: a six-week test on your own past data. Our target: the list is 2.5 times better than random, and the AI agrees with people 85% of the time. Step two: a pilot in months 2 and 3. One region, 20 agents, and a control group. We continue if the save rate is at least 5 points better than the control group, and each save costs 80 euros or less. Step three: we roll out from month 4."
+**SAY:** "From you, we need four things. A sponsor. A retention lead who owns the offers. One data engineer. And three months of anonymous call data."
+**OBJECTION:** "So in six weeks you have a list tested on your data. And in month 2 you see the first real results."
+**→** "Before I ask for your decision, let me show you how it works in practice."
+
+---
+
+## Part 4: The live demo (7 minutes)
+
+### Slide 12: A day with the Save Desk · 11:45–12:30
+**SAY:** "First, here is what I will show you. At 2 in the morning, the platform reads the calls and gives every customer a risk score. At 8:30, the agent opens the list of customers to call. During the call, the agent saves the result. And at any time, the manager can ask Genie a question. I will show you three things: who to call, why, and what to offer."
+**DO:** Go to the simulator tab.
+
+### Demo step 1: Solution overview · 12:30–12:45
+**SAY:** "This is Streamline's Databricks workspace. Here you see the full journey, from the raw data to the app. Everything is on one platform."
+
+### Demo step 2: Jobs & Pipelines · 12:45–13:30
+**DO:** Click *Jobs & Pipelines* → **▶ Run now**. Then click the tab **Lakeflow pipeline: save-desk-ingest**.
+**SAY:** "I start the night job. It loads the data, reads the calls with AI, applies the security rules, scores every customer, and updates the app. Last night it processed 20,000 customers and almost 14,000 calls."
+**SAY:** "For you, as Head of Data Platform: we load the data with Lakeflow. It loads only the new files. It also has quality rules. For example, a call without text or a strange bill is removed before it reaches the model."
+**OBJECTION:** "In production, the data comes directly from your billing, network and contact centre systems. The rest of the solution does not change."
+
+### Demo step 3: AI Functions · 13:30–14:15
+**DO:** Click *AI Functions* → **▶ Run**. Point at the call marked **1 · switching**.
+**SAY:** "Now the AI reads every call with simple SQL. For each call, it finds the mood of the customer, the reason for the call, and whether they want to leave. Here, the customer is calling about a bill that almost doubled. The AI marks that they want to switch."
+**OBJECTION:** "The AI models run inside Databricks. So the calls never leave the platform. And every night we read only the new calls, so the cost stays low."
+
+### Demo step 4: Catalog · 14:15–14:45
+**DO:** Click *Catalog* → **raw › care_calls** → tab **Sample data**. Then click the **Lineage** tab on *save_list*.
+**SAY:** "The call text is personal data. I am logged in as a retention user, so Unity Catalog hides the text. I see the word REDACTED. Only the data team can read it. And here we see the full path of the data, from the raw files to the app and Genie."
+
+### Demo step 5: The Save Desk app (the most important part) · 14:45–16:45
 **DO:** Click *Apps*.
-**SAY:** "Now the agent's screen. This is a Databricks App. At the top: 1,825 subscribers at risk, about €838k of annual revenue in this sample. The list is ranked by value at risk, not only by probability."
-**DO:** The first row, **STL102197**, is already open on the right.
-**SAY:** "The top subscriber: an 89% chance of leaving in the next 60 days, €2,377 at stake. Why: they mentioned switching on a care call, and their bill went up 50%. So the next best offer is a loyalty price match, and here is a suggested opening line for the agent." *(Read the first sentence of the opening.)*
+**SAY:** "This is the agent's screen. It is a Databricks App. At the top, you see 1,825 customers at risk. Together they pay about 838,000 euros a year. The list is sorted by how much money is at risk."
+**SAY:** "The first customer has an 89% chance of leaving in the next 60 days. That is 2,377 euros at risk. Why? They talked about switching on a call, and their bill went up by 50%. So the app suggests a loyalty price match. It also gives the agent a first sentence to say." *(Read the first sentence on the screen.)*
 **DO:** Click **Offer accepted**.
-**SAY:** "One click, and the outcome is saved." The counter shows 1 save and €2,682 of annual revenue kept.
-**DO:** Filters: **All drivers → network**, **All regions → South**.
-**SAY:** "Now the same list filtered by network problems in the South. A discount does not fix a dropped call. This list goes to the network team, not only to retention."
-**DO:** Reset the filters (choose *All drivers*, *All regions*).
+**SAY:** "With one click, the agent saves the result. Now the counter shows one customer saved."
+**DO:** Change the filters: **network** and **South**.
+**SAY:** "Now I show only the customers with network problems in the South. A discount does not fix a bad network. So this list goes to the network team too."
+**DO:** Set the filters back to *All drivers* and *All regions*.
 
-### Demo step 6: Lakebase · 11:30–12:00
-**DO:** Click the link **view in Lakebase** in the green message (or *Lakebase* in the menu).
-**SAY:** "And here is the outcome we just logged, written to Lakebase, the managed Postgres behind the app, in milliseconds. These outcomes flow back to the lakehouse, so every week the model learns which offers actually saved which customers."
+### Demo step 6: Lakebase · 16:45–17:15
+**DO:** Click **view in Lakebase** in the green message.
+**SAY:** "Here is the result I just saved. It is in Lakebase, the database behind the app. It was saved in milliseconds. Every week, these results go back to the model. So the model learns which offers really keep customers."
 
-### Demo step 7: Genie · 12:00–13:00
+### Demo step 7: Genie · 17:15–18:00
 **DO:** Click *Genie* → the sample question **"What is the churn rate for customers who mentioned switching on a care call vs. those who did not?"**
-**SAY:** "Finally, the manager. With Genie anyone can ask in plain English. The answer: 45% against 10%. And Genie shows the SQL behind it, so every answer can be checked." *(Optional: the network-region question → "the South".)*
+**SAY:** "Last, the manager. With Genie, anyone can ask a question in plain English. I asked: what is the churn rate for customers who talked about switching, compared to the others? The answer: 45% against 10%. Genie also shows the SQL query, so you can check every answer."
 
-### Back to slide 5 / TELL · 13:00–13:30
-**DO:** Switch back to the deck.
-**SAY:** "What you just saw is the difference between reacting to a porting request and calling a customer while there is still time. At 20,000 saves a year, that is €6.5 million of revenue."
-**ASK:** "Is this how your retention team would want to work?"
-
----
-
-## Part 3: How it is built (4 min, technical altitude)
-
-### Slide 6: One governed journey from raw data to the agent's screen · 13:30–15:00
-**SAY (technical):** "One journey, all on Databricks. Lakeflow ingests and checks quality. Unity Catalog governs everything: schemas, tags, masks, grants and lineage. AI Functions read the calls; the churn model is tracked in MLflow and registered in Unity Catalog. Lakebase serves the app with millisecond reads and takes the write-back. Genie answers on the same gold tables. The Databricks App is the agent's screen. It all deploys as one Asset Bundle."
-**SAY (business, one line):** "For you, that means one platform, one copy of the data and one set of permissions."
-**KEY POINTS:** integrated, not stitched · closed loop · production path without changes downstream.
-
-### Slide 7: Security and governance by design · 15:00–16:00
-**SAY:** "Transcripts are the sensitive asset, so they get the strictest controls: tagged, masked, visible only to the data team. Retention users and Genie see only the derived signals. The LLM runs on Databricks-hosted models, so no data goes to an outside API. For quality: pipeline expectations, LLM intent 95% aligned with the IVR queue in the build, and in the POC a check against 500 calls labelled by people, with a target of at least 85%."
-
-### Slide 8: Decisions and trade-offs · 16:00–17:30
-**SAY:** "These are the choices I would defend. AI Functions instead of a fine-tuned model: the task is generic, so we ship in days and keep everything governed; the cost is per token, which we manage by processing only new calls. Gradient boosting instead of deep learning, because agents need to know why they are calling. Lakebase for the app, because lookups and write-back are transactional work. Rule-based offers first, then an uplift model trained on real outcomes. Nightly batch first; real time later if the pilot shows same-day signals matter."
-**→** "So what is it worth, what does it cost, and how do we prove it quickly?"
+### Back to the deck · 18:00–18:30
+**DO:** Go back to the deck, on slide 12.
+**SAY:** "So what does this mean for you? Today you react when the customer is already gone. With this, you call the customer while you can still keep them. For you, as CCO, 20,000 customers kept means 6.5 million euros a year. For you, as Head of Data Platform, it all runs on one platform with one set of permissions."
+**DO:** Go to the next slide (slide 13).
 
 ---
 
-## Part 4: Value, cost and plan (6 min, business altitude)
+## Part 5: The decision (1 minute)
 
-### Slide 9: Value, cost and plan (divider) · 17:30
-**SAY:** Use the transition line above; move on.
+### Slide 13: The decision we are asking for · 18:30–19:30
+**SAY:** "To sum up. One point less churn. About 5 million euros a year. One secure platform. And we prove it in six weeks, before you invest more. So I am asking you for three things. Approve a six-week test. Name a sponsor and a retention lead. And share three months of anonymous data. In six weeks, you will know if this list finds your customers who want to leave."
+**ASK, then stop talking:** "What do you need to see to approve the test?"
 
-### Slide 10: Business case: about €5.0M net per year · 17:30–19:30
-**SAY:** "The math is simple, and I want you to challenge every input. 2 million postpaid subscribers, 1.4% monthly churn: about 336,000 leave each year, about €109 million of revenue. To save 20,000, at a 25% save rate we need to reach 80,000 churners. With 56% precision that is about 143,000 calls a year, around 550 a day. 20,000 saves at €324 a year is €6.5 million. Offers cost about €1.4 million, because some go to customers who would have stayed. The platform is about €40k. Net: about €5 million a year, €73 per save."
-**DOWNSIDE (say it before they ask):** "If the save rate is only half, the same calls still give about €2.2 million net."
-
-### Slide 11: Cost: about $1.6k for the POC, $3.5k a month in production · 19:30–20:30
-**SAY:** "The platform cost is small next to the value. About $1.6k of compute for the POC, about $3.5k a month in production at list price, about $42k a year. The biggest line is Gen AI on 690,000 calls a month; combining the three AI calls into one prompt brings the total to about $2.8k a month."
-**BE HONEST:** "These are list-price estimates. Our team confirms them with a sizing tool before any quote; only the Foundation Model API rate is read directly from the public pricing page."
-
-### Slide 12: Plan: prove it in six weeks, then scale with a control group · 20:30–22:00
-**SAY:** "We de-risk in three steps, each with a go/no-go in your KPIs. POC, six weeks: prove the signal on your own history. The gate is 2.5× lift and 85% agreement with labels from people. Pilot, months 2 and 3: one region, 20 agents, a randomised control group. We go if the save rate beats control by at least 5 points at no more than €80 per save. Then scale from month 4. What we need from you: a sponsor, a retention lead who owns the offers, one data engineer, and approval to use three months of anonymised transcripts."
-
-### Slide 13: Questions we expect, and our answers · only if needed
-Use it only when questions come. Answer at the altitude of whoever asked (see the Q&A sheet below).
-
-### Slide 14: The decision we are asking for · 22:00–23:00
-**SAY:** "The ask is simple: approve a six-week POC, name a sponsor and a retention lead, and share three months of anonymised data. In six weeks you will know, on your own data, whether this list finds your churners."
-**THEN STOP TALKING and ask:** "What would you need to see to approve the POC?"
-
-### Slide 15: Appendix: build evidence and references, and Slide 16: closing
-Reference only. Show slide 15 if someone asks "has this actually run?": "Every result is committed as text in the repository: the run log, the metrics, the Genie answers."
+### Slides 14, 15 and 16: only if needed
+Slide 14 has the questions we expect. Show it only if they ask a question.
+Only if they ask "Did this really run?": "Yes. All the results are saved as text in the code repository: the run logs, the model results and the Genie answers."
 
 ---
 
-## Q&A sheet: lead with the conclusion, then one reason
+## Questions and answers: give the answer first, then one reason
 
-**Business (CCO)**
+**CCO (business)**
 | Question | Answer |
 |---|---|
-| Too expensive? | The platform is about $42k a year against about €5M net. The real cost is the offers, and the control group keeps that honest. |
-| How fast is the value? | Six weeks to a back-tested list on your data; first measured saves in month 2. |
-| It's synthetic data. | Yes, so the POC gate is lower (2.5×, not 3.7×) and is measured on your history before you commit more. |
-| Are we just giving discounts away? | The offer follows the reason. A network fix costs €15; discounts go only to price-driven churners. |
-| What if it doesn't work? | At half the save rate it is still about €2.2M net. If the POC misses its gate, we stop. |
+| Is it too expensive? | No. The platform costs about 42,000 dollars a year. The value is about 5 million euros. The real cost is the offers, and the control group checks that. |
+| How fast do we see value? | In six weeks, a list tested on your data. In month 2, the first real results. |
+| It is test data. | Yes. That is why our target in the test is lower: 2.5 times, not 3.7. We measure it on your data before you invest more. |
+| Are we just giving discounts? | No. The offer depends on the reason. A network fix costs 15 euros. Only customers who leave because of price get a discount. |
+| What if it does not work? | With half the results, it is still worth about 2.2 million euros. If the test fails, we stop after six weeks and about 1,600 dollars. |
 
-**Technical (platform lead)**
+**Head of Data Platform (technical)**
 | Question | Answer |
 |---|---|
-| Integration? | Lakeflow Connect or Kafka from billing, network probes and the contact-centre platform into the same bronze tables. Outcomes sit in Postgres, readable by the CRM. |
-| Data quality? | Pipeline expectations; LLM labels checked against labels from people; drift and retraining tracked in MLflow. |
-| Security / PII? | Transcripts tagged and masked in Unity Catalog; Databricks-hosted models; gold-only grants; the app runs as its own service principal; lineage end to end. |
-| Why Lakebase, not Delta? | Millisecond lookups plus transactional write-back are OLTP work. A synced table keeps it declarative. |
-| Why not real time? | Save decisions are daily, so batch is cheaper. Real-time scoring when a call ends is phase 3. |
-| LLM cost at scale? | About $1.2k a month for 690,000 calls; one combined prompt cuts about 60%. |
-| Lock-in? | Delta, Postgres and MLflow/scikit-learn are open. |
-| Is this demo live? | It is a demo workspace replaying last night's run on synthetic data. The code in the repository deploys the same thing to a real workspace as one Asset Bundle. |
+| How do we connect our systems? | Lakeflow Connect or Kafka bring data from billing, network and the contact centre. The results are in Postgres, so your CRM can read them. |
+| Data quality? | Quality rules in the pipeline. AI results checked against people. Model changes tracked in MLflow. |
+| Security and personal data? | The call text is tagged and hidden in Unity Catalog. The AI runs inside Databricks. Users see only the final tables. The app has its own technical user. We track the data from start to end. |
+| Why Lakebase and not Delta? | The app needs very fast reads and writes. That is a database job. Lakebase does it. |
+| Why not real time? | The team decides once a day, so a night job is cheaper. Real time is step three. |
+| AI cost at scale? | About 1,200 dollars a month for 690,000 calls. One combined step cuts it by about 60%. |
+| Are we locked in? | No. Delta, Postgres and MLflow are open source. |
+| Is this demo live? | It is a demo workspace that shows last night's run on test data. The code in the repository deploys the same solution to a real workspace. |
 
-## Delivery reminders
-- **Tell → show → tell:** say what you'll show, show it, then say what it means in euros and KPIs.
-- **Switch altitude out loud:** "For you, [CCO], that means… and for you, [architect], the mechanism is…"
-- Keep the demo to about 8 minutes, and don't explain every screen.
-- If you lose your place in the demo, open the **Demo script** panel (bottom left) and click the next step.
-- Close with the question, then wait.
+## Reminders
+- Say the structure: "I will show you…", "Now I show it…", "This means for you…"
+- Say who you talk to: "For you, as CCO…", "For you, as Head of Data Platform…"
+- Read the numbers on the screen out loud.
+- The demo is at the end, on slide 12. Just go to the next slide each time.
+- Keep the demo to about 7 minutes.
+- If you get lost in the demo, open the **Demo script** panel (bottom left) and click the next step.
+- Ask the last question, then wait.

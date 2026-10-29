@@ -38,20 +38,20 @@
 
 ## Part 1: Introduction and outcome (4 minutes)
 
-### Slide 1: Keep the customers who are already telling us they will leave · 0:00–1:00
+### Slide 1: Keep customers before they leave · 0:00–1:00
 **SAY:** "Good morning, and thank you for your time. My name is Emmanuele Bello. I am a Delivery Solutions Architect at Databricks, and I am based in Italy. I work with large companies in Southern Europe. I help them take data and AI projects from the first idea to production, and I make sure they deliver real value. I built the solution you will see today."
 **SAY:** "Today I want to show you how Streamline can keep the customers who are telling you they want to leave. First, the result and what we learned. Then how it is built and protected. Then the value, the cost and a six-week plan. And at the end, a short live demo, so you can see it working."
 **SAY:** "For you, as CCO, I will focus on the business case and the numbers. For you, as Head of Data Platform, I will focus on how it is built, how it is secured, and how it runs."
 **→** "Let me start with the result."
 
-### Slide 2: The outcome: one point less churn, €5M a year kept · 1:00–2:30
+### Slide 2: One point less churn, €5M a year · 1:00–2:30
 **SAY:** "Our goal is to reduce churn by one point. From 16.8% to 15.8% a year. For Streamline, this means 20,000 customers stay every year. That is about 6.5 million euros of revenue. After the cost of the offers and the platform, it is about 5 million euros net."
 **SAY:** "For you, as CCO, this is one number. We measure it every month against a control group. So it is a real result, not a forecast. For the retention team, every agent starts the day knowing who to call, why, and what to offer."
 **SAY:** "And the cost is low. About 1,600 dollars for a six-week test. About 3,500 dollars a month in production."
 **OBJECTION:** "The model results come from the build. The business numbers are our assumptions: 2 million customers, 1.4% churn a month, and 27 euros a month per customer. In week one, we replace them with your real numbers."
 **→** "Why do we need this? Because today, you see churn too late."
 
-### Slide 3: Today churn becomes visible only after the customer has left · 2:30–3:15
+### Slide 3: Today we see churn too late · 2:30–3:15
 **SAY:** "Today, the retention team sees churn when the customer asks to move their number. By then it is too late. But the warning signs come earlier, from three places. What the customer says when they call customer care. How the network works for them. And what happens to their bill and their contract. Today nobody puts these signs together. So the team reacts late, the offers are the same for everyone, and analysts wait days for a report. I think your retention team knows this problem well."
 **→** "We built a solution with test data, to see what these signs are worth."
 
@@ -66,7 +66,7 @@
 
 ## Part 2: How it is built (4 minutes, mostly technical)
 
-### Slide 5: One governed journey from raw data to the agent's screen · 4:30–5:45
+### Slide 5: One platform, from raw data to the app · 4:30–5:45
 **SAY:** "Now the architecture, mainly for you, as Head of Data Platform. Lakeflow loads the data and checks its quality. Unity Catalog controls access to everything, and it tracks where the data comes from. AI Functions read the calls. The churn model is tracked in MLflow. Lakebase is the database for the app. Genie uses the same tables. And the app is the agent's screen. We deploy everything together, as code."
 **SAY:** "For you, as CCO, this means one platform, one copy of the data, and one set of permissions."
 
@@ -86,15 +86,15 @@
 ### Slide 8: Value, cost and plan
 **SAY:** Use the line above and go to the next slide.
 
-### Slide 9: Business case: about €5.0M net per year · 8:15–9:45
+### Slide 9: Business case: €5M net a year · 8:15–9:45
 **SAY:** "Here is the calculation, step by step. Streamline has 2 million customers. Each month, 1.4% leave. That is about 336,000 customers a year, and about 109 million euros of revenue. We want to keep 20,000 of them. If agents save one customer in four, we need to reach 80,000 customers who want to leave. Our list is right 56% of the time. So we need about 143,000 calls a year. That is about 550 calls a day. 20,000 customers kept, at 324 euros a year each, is 6.5 million euros. The offers cost about 1.4 million euros. The platform costs about 40,000 euros. So the net value is about 5 million euros a year."
 **OBJECTION:** "And if the agents save only half as many customers, the value is still about 2.2 million euros a year."
 
-### Slide 10: Cost: about $1.6k for the POC, $3.5k a month in production · 9:45–10:30
+### Slide 10: Cost: $1.6k POC, $3.5k a month · 9:45–10:30
 **SAY:** "The platform cost is small compared to the value. About 1,600 dollars for the six-week test. About 3,500 dollars a month in production. That is about 42,000 dollars a year. The biggest cost is the AI that reads 690,000 calls a month. If we do the three AI tasks in one step, the cost goes down to about 2,800 dollars a month."
 **OBJECTION:** "These are list prices. We will confirm them before any quote."
 
-### Slide 11: Plan: prove it in six weeks, then scale with a control group · 10:30–11:45
+### Slide 11: Prove it in six weeks, then scale · 10:30–11:45
 **SAY:** "We reduce the risk in three steps. At each step, you decide if we continue, based on your numbers. Step one: a six-week test on your own past data. Our target: the list is 2.5 times better than random, and the AI agrees with people 85% of the time. Step two: a pilot in months 2 and 3. One region, 20 agents, and a control group. We continue if the save rate is at least 5 points better than the control group, and each save costs 80 euros or less. Step three: we roll out from month 4."
 **SAY:** "From you, we need four things. A sponsor. A retention lead who owns the offers. One data engineer. And three months of anonymous call data."
 **OBJECTION:** "So in six weeks you have a list tested on your data. And in month 2 you see the first real results."
@@ -153,7 +153,7 @@
 
 ## Part 5: The decision (1 minute)
 
-### Slide 13: The decision we are asking for · 18:30–19:30
+### Slide 13: The decision we ask for · 18:30–19:30
 **SAY:** "To sum up. One point less churn. About 5 million euros a year. One secure platform. And we prove it in six weeks, before you invest more. So I am asking you for three things. Approve a six-week test. Name a sponsor and a retention lead. And share three months of anonymous data. In six weeks, you will know if this list finds your customers who want to leave."
 **ASK, then stop talking:** "What do you need to see to approve the test?"
 
